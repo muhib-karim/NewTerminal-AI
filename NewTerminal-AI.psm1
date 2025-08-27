@@ -537,5 +537,109 @@ Export-ModuleMember -Function @(
     'Show-ThinkingAnimation'
 ) -Alias @('ai', 'aia', 'nl')
 
-# Welcome message
-Write-AIResponse "NewTerminal-AI loaded! Use 'ai <request>' for commands or 'nl' for interactive mode." "success"
+# Auto-start in natural language mode
+function Start-AITerminal {
+    Write-Host "🤖 AI Terminal - Natural Language Interface" -ForegroundColor Green
+    Write-Host "Describe what you want to do in plain English. Type 'exit' to quit." -ForegroundColor Gray
+    Write-Host ""
+    
+    $sessionCommands = 0
+    
+    while ($true) {
+        $context = Get-ContextInfo
+        $prompt = "AI>"
+        
+        # Clean prompt with minimal context
+        if ($context.GitBranch) {
+            $prompt = "AI($($context.GitBranch))>"
+        }
+        
+        Write-Host "$prompt " -NoNewline -ForegroundColor Cyan
+        $input = Read-Host
+        
+        switch ($input.ToLower().Trim()) {
+            'exit' {
+                Write-Host "👋 Goodbye!" -ForegroundColor Green
+                break
+            }
+            'history' {
+                Show-CommandHistory -Last 10
+                continue
+            }
+            'clear' {
+                Clear-Host
+                Write-Host "🤖 AI Terminal - Natural Language Interface" -ForegroundColor Green
+                Write-Host "Describe what you want to do in plain English. Type 'exit' to quit." -ForegroundColor Gray
+                Write-Host ""
+                continue
+            }
+            'help' {
+                Write-Host "Available commands:" -ForegroundColor Yellow
+                Write-Host "  exit     - Exit AI terminal" -ForegroundColor Cyan
+                Write-Host "  history  - Show command history" -ForegroundColor Cyan
+                Write-Host "  clear    - Clear screen" -ForegroundColor Cyan
+                Write-Host "  help     - Show this help" -ForegroundColor Cyan
+                Write-Host "  Or describe what you want to do in natural language!" -ForegroundColor Green
+                continue
+            }
+            default {
+                if ($input.Trim()) {
+                    $sessionCommands++
+                    # Smart execution with confirmation for dangerous commands
+                    $command = Get-CommandSuggestion -NaturalLanguage $input
+                    
+                    if ($command) {
+                        $command = $command.Trim() -replace '^```.*$', '' -replace '^```$', ''
+                        $command = $command.Trim()
+                        
+                        # Show the command being generated
+                        Write-Host "💻 " -NoNewline -ForegroundColor Cyan
+                        Write-Host "$command" -ForegroundColor Yellow
+                        
+                        if (Test-CommandSafety -Command $command) {
+                            # Auto-execute safe commands
+                            try {
+                                $result = Invoke-Expression $command 2>&1
+                                if ($result) {
+                                    $result | ForEach-Object { Write-Host $_ }
+                                }
+                                Add-ToHistory -Request $input -Command $command -Executed $true
+                            } catch {
+                                Write-Host "❌ $($_.Exception.Message)" -ForegroundColor Red
+                                Add-ToHistory -Request $input -Command $command -Executed $false
+                            }
+                        } else {
+                            # Ask for confirmation on potentially dangerous commands
+                            Write-Host "⚠️  This command may be potentially harmful. Execute? [y/N]: " -NoNewline -ForegroundColor Yellow
+                            $confirm = Read-Host
+                            if ($confirm.ToLower() -eq 'y') {
+                                try {
+                                    $result = Invoke-Expression $command 2>&1
+                                    if ($result) {
+                                        $result | ForEach-Object { Write-Host $_ }
+                                    }
+                                    Add-ToHistory -Request $input -Command $command -Executed $true
+                                } catch {
+                                    Write-Host "❌ $($_.Exception.Message)" -ForegroundColor Red
+                                    Add-ToHistory -Request $input -Command $command -Executed $false
+                                }
+                            } else {
+                                Write-Host "Command cancelled" -ForegroundColor Gray
+                                Add-ToHistory -Request $input -Command $command -Executed $false
+                            }
+                        }
+                    } else {
+                        Write-Host "❌ Could not understand: '$input'" -ForegroundColor Red
+                        Add-ToHistory -Request $input -Command "" -Executed $false
+                    }
+                    Write-Host ""
+                }
+            }
+        }
+    }
+}
+
+# Welcome message and auto-start
+Write-Host "[SUCCESS $(Get-Date -Format 'HH:mm:ss')] AI Terminal loaded! Starting natural language interface..." -ForegroundColor Green
+Start-Sleep -Milliseconds 500
+Start-AITerminal

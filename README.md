@@ -1,89 +1,141 @@
-# NewTerminal-AI 🚀
+# AI Terminal
 
-**Transform your terminal into an intelligent, natural language interface powered by AI**
+🤖 **Transform your terminal with natural language AI** - Convert plain English into CLI commands across Windows, macOS, and Linux.
 
-NewTerminal-AI brings the power of artificial intelligence directly to your command line, allowing you to interact with your system using natural language. Whether you're a beginner learning CLI commands or an expert looking for faster workflows, NewTerminal-AI makes terminal operations intuitive and efficient.
+## 🎯 Key Features
 
-## ✨ Features
+### 🧠 Intelligent Natural Language Processing
+- **Context-Aware AI**: Understands your current directory, Git status, and project environment
+- **Smart Command Generation**: Converts natural language to optimal CLI commands
+- **Educational Display**: Shows generated commands for learning and transparency
+- **Command History**: Tracks all interactions for reference and learning
 
-### 🎯 Core Functionality
-- **Natural Language Commands**: Describe what you want to do in plain English
-- **Auto-Execution Mode**: Commands execute automatically with clean, educational output
-- **Interactive Mode**: Review and confirm commands before execution
-- **Educational Display**: See the actual CLI commands being generated and executed
-- **Cross-Platform Support**: Works on Windows (PowerShell), macOS, and Linux
+### 🛡️ Smart Safety System
+- **Automatic Safety Analysis**: Identifies potentially harmful commands
+- **Smart Execution**: Auto-runs safe commands, asks confirmation for risky ones
+- **Command Preview**: Always shows what will be executed before running
+- **Graceful Error Handling**: Clear, helpful error messages and suggestions
 
-### 🧠 AI-Powered Intelligence
-- **Context-Aware**: Understands your current directory and system state
-- **Command Safety**: Built-in safety checks for potentially dangerous operations
-- **Smart Suggestions**: Generates optimal commands based on your intent
-- **Learning-Friendly**: Perfect for users learning command-line operations
+### 🌍 Cross-Platform Compatibility
+- **Windows**: Native PowerShell integration with auto-start
+- **macOS**: PowerShell Core with Homebrew support
+- **Linux**: PowerShell Core with package manager integration
+- **Consistent Experience**: Same natural language interface across all platforms
 
-### 🎨 Clean Interface
-- **Warp AI-Style Output**: Minimal, clean interface focusing on results
-- **Color-Coded Responses**: Easy-to-read output with visual indicators
-- **Progress Indicators**: Visual feedback during AI processing
-- **Error Handling**: Clear, helpful error messages and suggestions
+### 🔒 Privacy & Performance
+- **Local AI Processing**: Uses Ollama for complete privacy
+- **No External Dependencies**: All processing happens on your machine
+- **Fast Response Times**: Local models provide quick command generation
+- **Offline Capable**: Works without internet connection after initial setup
 
 ## 🚀 Quick Start
 
-### Windows (PowerShell)
+### One-Line Installation
+
+#### Windows
 ```powershell
-# Download and run the installer
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/yourusername/NewTerminal-AI/main/scripts/install-windows.ps1" -OutFile "install.ps1"
-.\install.ps1
+# Run as Administrator (recommended) or add -Force for user installation
+irm https://raw.githubusercontent.com/yourusername/AI-Terminal/main/install.ps1 | iex
 ```
 
-### macOS/Linux (Bash/Zsh)
+#### macOS/Linux
 ```bash
-# Download and run the installer
-curl -fsSL https://raw.githubusercontent.com/yourusername/NewTerminal-AI/main/scripts/install-unix.sh | bash
+# Automatic installation with dependencies
+curl -fsSL https://raw.githubusercontent.com/yourusername/AI-Terminal/main/install.sh | bash
 ```
 
 ### Manual Installation
-1. Clone this repository
-2. Install [Ollama](https://ollama.ai)
-3. Run the appropriate installation script from the `scripts/` directory
 
-## 💡 Usage Examples
+#### Prerequisites
+- **PowerShell 5.0+** (Windows) or **PowerShell Core 6.0+** (macOS/Linux)
+- **Ollama** for local AI processing
 
-### Auto-Execute Mode (`aia`)
-Perfect for quick tasks and learning:
+#### Step-by-Step
 ```bash
-# List all files in the current directory
-aia "list all files"
+# 1. Clone the repository
+git clone https://github.com/yourusername/AI-Terminal.git
+cd AI-Terminal
 
-# Create a new Python file
-aia "create a file called hello.py"
+# 2. Run the installation script
+# Windows:
+.\install.ps1
 
-# Find large files
-aia "find files larger than 100MB"
-
-# Git operations
-aia "commit all changes with message 'update readme'"
+# macOS/Linux:
+./install.sh
 ```
 
-### Interactive Mode (`ai`)
-Review commands before execution:
-```bash
-# Generate command with confirmation
-ai "delete all .tmp files"
-# Shows: rm *.tmp
-# Prompt: Execute this command? (y/n)
+## 💡 Usage
+
+### Getting Started
+After installation, AI Terminal starts automatically in natural language mode:
+
+```
+🤖 AI Terminal - Natural Language Interface
+Describe what you want to do in plain English. Type 'exit' to quit.
+
+AI> list all files in this directory
+💻 Get-ChildItem
+    Directory: C:\Users\YourName\Projects
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+d-----        12/10/2024   2:30 PM                src
+d-----        12/10/2024   1:15 PM                docs
+-a----        12/10/2024   3:45 PM           1024 README.md
 ```
 
-### Natural Language Mode (`nl`)
-Interactive conversation-style interface:
-```bash
-nl
-# Enters interactive mode
-> create a backup of my documents folder
-💻 cp -r ~/Documents ~/Documents_backup_$(date +%Y%m%d)
-[Command executed successfully]
+## 📋 Built-in Commands
 
-> what files were created today?
-💻 find . -type f -newermt $(date +%Y-%m-%d) -ls
-[Lists today's files]
+AI Terminal starts automatically in natural language mode. Simply describe what you want to do!
+
+### Special Commands
+| Command | Description |
+|---------|-------------|
+| `exit` | Exit AI Terminal |
+| `history` | Show recent command history |
+| `clear` | Clear screen and reset interface |
+| `help` | Show available commands and examples |
+
+### Legacy Commands (still available)
+| Command | Description |
+|---------|-------------|
+| `ai "<request>"` | Process single natural language request |
+| `aia "<request>"` | Auto-execute mode (legacy) |
+| `nl` | Start natural language mode (now default) |
+
+### Natural Language Examples
+
+#### File & Directory Operations
+```
+AI> create a new folder called projects
+💻 New-Item -ItemType Directory -Name "projects"
+
+AI> copy all text files to the backup folder  
+💻 Copy-Item *.txt -Destination backup
+
+AI> find files larger than 100MB
+💻 Get-ChildItem -Recurse | Where-Object {$_.Length -gt 100MB}
+```
+
+#### Git Operations
+```
+AI> show my git status
+💻 git status
+
+AI> commit all changes with message update docs
+💻 git add . && git commit -m "update docs"
+⚠️  This command may be potentially harmful. Execute? [y/N]:
+
+AI> create a new branch called feature-auth
+💻 git checkout -b feature-auth
+```
+
+#### System Information
+```
+AI> show current disk usage
+💻 Get-WmiObject -Class Win32_LogicalDisk | Select-Object DeviceID, @{Name="Size(GB)";Expression={[math]::Round($_.Size/1GB,2)}}
+
+AI> list running processes
+💻 Get-Process | Sort-Object CPU -Descending | Select-Object -First 10
 ```
 
 ## 🛠️ Installation Requirements
@@ -191,52 +243,96 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ### Troubleshooting
 
-**Ollama Connection Issues**
+#### AI Terminal doesn't start automatically
+```powershell
+# Windows: Check if module is installed
+Get-Module -ListAvailable AITerminal
+
+# Manually import if needed
+Import-Module AITerminal -Force
+```
+
+#### "Ollama not found" or connection errors
 ```bash
 # Check if Ollama is running
-ollama list
+# Windows:
+Get-Process ollama -ErrorAction SilentlyContinue
+
+# macOS/Linux:
+ps aux | grep ollama
 
 # Start Ollama service
 ollama serve
 ```
 
-**Command Not Found**
+#### "Model not found" errors
 ```bash
-# Reload your shell configuration
-source ~/.bashrc  # Linux/macOS
-. $PROFILE        # Windows PowerShell
+# Pull the required model
+ollama pull llama3.2:3b
+
+# List available models
+ollama list
 ```
 
-**Model Download Issues**
-```bash
-# Manually pull the model
-ollama pull llama3.2:1b
+#### Installation Issues
+```powershell
+# Windows: Run as Administrator
+# Or use user installation:
+.\install.ps1 -Force
+
+# macOS/Linux: Check permissions
+sudo chmod +x install.sh
+./install.sh
 ```
 
-### Getting Help
-- 📖 [Documentation](https://github.com/yourusername/NewTerminal-AI/wiki)
-- 🐛 [Issue Tracker](https://github.com/yourusername/NewTerminal-AI/issues)
-- 💬 [Discussions](https://github.com/yourusername/NewTerminal-AI/discussions)
-- 📧 [Email Support](mailto:support@newterminal-ai.com)
+**Performance Tips**
+- **Faster Models**: Use `llama3.2:1b` for quicker responses on lower-end hardware
+- **Memory**: Ensure Ollama has at least 4GB RAM available
+- **Storage**: Keep 10GB+ free space for model storage
 
-## 🌟 Acknowledgments
+## 🤝 Contributing
 
-- [Ollama](https://ollama.ai) for providing the local AI runtime
-- [Warp](https://warp.dev) for UI/UX inspiration
-- The open-source community for continuous feedback and contributions
+We welcome contributions! Here's how you can help:
 
-## 🔮 Roadmap
+- 🐛 **Report Bugs**: [Create an issue](https://github.com/yourusername/AI-Terminal/issues)
+- 💡 **Suggest Features**: [Start a discussion](https://github.com/yourusername/AI-Terminal/discussions)
+- 🔧 **Submit PRs**: See our [Contributing Guide](CONTRIBUTING.md)
+- 📖 **Improve Docs**: Help make our documentation better
 
-- [ ] Plugin system for custom commands
-- [ ] Multi-language support
-- [ ] Cloud model integration options
-- [ ] Advanced scripting capabilities
-- [ ] Team collaboration features
-- [ ] Performance optimizations
-- [ ] Mobile companion app
+### Development Setup
+```bash
+# Clone and setup
+git clone https://github.com/yourusername/AI-Terminal.git
+cd AI-Terminal
+
+# Test your changes
+.\install.ps1 -Force  # Windows
+./install.sh          # macOS/Linux
+```
+
+## 📊 Project Stats
+
+- 🌟 **Cross-Platform**: Windows, macOS, Linux
+- 🔒 **Privacy-First**: 100% local AI processing
+- 🚀 **Zero-Config**: Auto-starts in natural language mode
+- 📚 **Educational**: Shows CLI commands for learning
+
+## 📄 License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- **[Ollama](https://ollama.ai)** - Local AI model infrastructure
+- **[PowerShell](https://github.com/PowerShell/PowerShell)** - Cross-platform shell
+- **Open Source Community** - For inspiration and feedback
 
 ---
 
-**Made with ❤️ by the NewTerminal-AI Team**
+<div align="center">
 
-*Transform your terminal experience today!* 🚀
+**🤖 Transform your terminal experience with natural language AI**
+
+[⭐ Star this repo](https://github.com/yourusername/AI-Terminal) • [🐛 Report Bug](https://github.com/yourusername/AI-Terminal/issues) • [💡 Request Feature](https://github.com/yourusername/AI-Terminal/discussions)
+
+</div>
