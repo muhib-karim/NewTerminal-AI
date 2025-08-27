@@ -1,8 +1,8 @@
-# 🚀 NewTerminal
+# 🚀 NewTerminal-AI
 
-Local AI for your terminal. NewTerminal pairs Ollama with Shell Genie so you can type natural language and get the exact shell command back — fully offline after the first model pull.
+Local AI for your terminal. NewTerminal-AI pairs Ollama with Shell Genie so you can type natural language and get the exact shell command back — fully offline after the first model pull.
 
-[![Release](https://img.shields.io/github/v/release/muhibalkarim/NewTerminal?label=release)](https://github.com/muhibalkarim/NewTerminal/releases) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) ![Platforms](https://img.shields.io/badge/platforms-Linux%20%7C%20macOS%20%7C%20Windows-blue)
+[![Release](https://img.shields.io/github/v/release/1111MK1111/NewTerminal-AI?label=release)](https://github.com/1111MK1111/NewTerminal-AI/releases) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) ![Platforms](https://img.shields.io/badge/platforms-Linux%20%7C%20macOS%20%7C%20Windows-blue)
 
 ---
 
@@ -22,7 +22,7 @@ Download the latest release ZIP and run the cross-platform installer.
 
 ### Linux/macOS
 ```bash
-curl -L https://github.com/muhibalkarim/NewTerminal/releases/latest/download/newterminal-v1.0.zip -o newterminal.zip
+curl -L https://github.com/1111MK1111/NewTerminal-AI/releases/latest/download/newterminal-v1.0.zip -o newterminal.zip
 unzip newterminal.zip
 cd newterminal-v1.0
 ./install-any.sh
@@ -30,7 +30,7 @@ cd newterminal-v1.0
 
 ### Windows (PowerShell)
 ```powershell
-Invoke-WebRequest https://github.com/muhibalkarim/NewTerminal/releases/latest/download/newterminal-v1.0.zip -OutFile newterminal.zip
+Invoke-WebRequest https://github.com/1111MK1111/NewTerminal-AI/releases/latest/download/newterminal-v1.0.zip -OutFile newterminal.zip
 Expand-Archive newterminal.zip -DestinationPath .
 cd newterminal-v1.0
 ./install-any.sh
