@@ -32,16 +32,31 @@
 
 ### One-Line Installation
 
-#### Windows
+#### Windows (PowerShell 5.0+ or PowerShell Core)
 ```powershell
-# Run as Administrator (recommended) or add -Force for user installation
-irm https://raw.githubusercontent.com/yourusername/AI-Terminal/main/install.ps1 | iex
+# Option 1: Administrator installation (recommended)
+irm https://raw.githubusercontent.com/1111MK1111/NewTerminal-AI/main/install.ps1 | iex
+
+# Option 2: User-only installation
+irm https://raw.githubusercontent.com/1111MK1111/NewTerminal-AI/main/install.ps1 | iex -ArgumentList "-Force"
 ```
 
-#### macOS/Linux
+#### macOS (Homebrew + PowerShell Core)
 ```bash
-# Automatic installation with dependencies
-curl -fsSL https://raw.githubusercontent.com/yourusername/AI-Terminal/main/install.sh | bash
+# Automatic installation with Homebrew and PowerShell Core
+curl -fsSL https://raw.githubusercontent.com/1111MK1111/NewTerminal-AI/main/install.sh | bash
+```
+
+#### Linux (Package Manager + PowerShell Core)
+```bash
+# Ubuntu/Debian
+curl -fsSL https://raw.githubusercontent.com/1111MK1111/NewTerminal-AI/main/install.sh | bash
+
+# CentOS/RHEL/Fedora
+curl -fsSL https://raw.githubusercontent.com/1111MK1111/NewTerminal-AI/main/install.sh | bash
+
+# Arch Linux
+curl -fsSL https://raw.githubusercontent.com/1111MK1111/NewTerminal-AI/main/install.sh | bash
 ```
 
 ### Manual Installation
@@ -141,15 +156,53 @@ AI> list running processes
 ## 🛠️ Installation Requirements
 
 ### System Requirements
-- **Windows**: PowerShell 5.0+ (Windows 10/11)
-- **macOS**: macOS 10.15+ with Bash/Zsh
-- **Linux**: Any modern distribution with Bash/Zsh
+
+#### Windows
+- **OS**: Windows 10 (1903+) or Windows 11
+- **PowerShell**: 5.1+ (built-in) or PowerShell Core 7.0+
+- **Architecture**: x64 (AMD64)
 - **Memory**: 4GB RAM minimum, 8GB+ recommended
-- **Storage**: 2GB free space for AI models
+- **Storage**: 3GB free space (2GB for AI models + 1GB for dependencies)
+
+#### macOS
+- **OS**: macOS 10.15 (Catalina) or later
+- **Architecture**: Intel x64 or Apple Silicon (M1/M2)
+- **Shell**: Bash, Zsh, or Fish
+- **Homebrew**: Automatically installed if not present
+- **Memory**: 4GB RAM minimum, 8GB+ recommended
+- **Storage**: 3GB free space
+
+#### Linux
+- **Distributions**: Ubuntu 18.04+, Debian 10+, CentOS 7+, RHEL 7+, Fedora 28+, Arch Linux
+- **Architecture**: x64 (AMD64) or ARM64
+- **Shell**: Bash, Zsh, or Fish
+- **Package Manager**: apt, yum, dnf, or pacman
+- **Memory**: 4GB RAM minimum, 8GB+ recommended
+- **Storage**: 3GB free space
+
+### What the Installation Scripts Do
+
+#### Windows (`install.ps1`)
+1. **PowerShell Check**: Verifies PowerShell version compatibility
+2. **Ollama Installation**: Downloads and installs Ollama using winget or direct download
+3. **Service Setup**: Starts Ollama service and configures auto-start
+4. **AI Model**: Downloads `llama3.2:3b` model (2GB)
+5. **Module Installation**: Installs AITerminal PowerShell module
+6. **Profile Setup**: Configures PowerShell profile for auto-start
+7. **Desktop Shortcut**: Creates convenient desktop launcher
+
+#### macOS/Linux (`install.sh`)
+1. **PowerShell Core**: Installs PowerShell Core via package manager
+2. **Ollama Installation**: Downloads and installs Ollama
+3. **Service Setup**: Configures Ollama as system service
+4. **AI Model**: Downloads `llama3.2:3b` model (2GB)
+5. **Module Installation**: Installs AITerminal PowerShell module
+6. **Profile Setup**: Configures PowerShell profile for auto-start
+7. **Launcher Script**: Creates `ai-terminal` command for easy access
 
 ### Dependencies
-- [Ollama](https://ollama.ai) - Local AI model runtime
-- Internet connection (for initial setup and model downloads)
+- **[Ollama](https://ollama.ai)** - Local AI model runtime (auto-installed)
+- **Internet connection** - Required for initial setup and model downloads only
 
 ## 🎛️ Configuration
 
@@ -243,46 +296,158 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ### Troubleshooting
 
-#### AI Terminal doesn't start automatically
+#### Verify Installation Success
 ```powershell
-# Windows: Check if module is installed
+# Check if AI Terminal is working
+ai-terminal  # Should start natural language interface
+
+# Or test the module directly
+Import-Module AITerminal -Force
+nl  # Should start natural language mode
+```
+
+#### AI Terminal doesn't start automatically
+
+**Windows:**
+```powershell
+# Check if module is installed
 Get-Module -ListAvailable AITerminal
+
+# Check PowerShell profile
+Test-Path $PROFILE
+Get-Content $PROFILE | Select-String "AITerminal"
 
 # Manually import if needed
 Import-Module AITerminal -Force
+
+# Recreate profile if missing
+if (!(Test-Path $PROFILE)) { New-Item -Path $PROFILE -ItemType File -Force }
+Add-Content $PROFILE "Import-Module AITerminal -Force; nl"
+```
+
+**macOS/Linux:**
+```bash
+# Check if PowerShell Core is installed
+pwsh --version
+
+# Check if ai-terminal command exists
+which ai-terminal
+
+# Manually start if needed
+pwsh -c "Import-Module AITerminal -Force; nl"
+
+# Recreate launcher if missing
+echo '#!/bin/bash' > ~/.local/bin/ai-terminal
+echo 'pwsh -c "Import-Module AITerminal -Force; nl"' >> ~/.local/bin/ai-terminal
+chmod +x ~/.local/bin/ai-terminal
 ```
 
 #### "Ollama not found" or connection errors
-```bash
+
+**Windows:**
+```powershell
 # Check if Ollama is running
-# Windows:
 Get-Process ollama -ErrorAction SilentlyContinue
 
-# macOS/Linux:
+# Check Ollama service
+Get-Service ollama -ErrorAction SilentlyContinue
+
+# Start Ollama manually
+Start-Service ollama
+# Or if not a service:
+ollama serve
+
+# Test Ollama connection
+ollama list
+```
+
+**macOS/Linux:**
+```bash
+# Check if Ollama is running
 ps aux | grep ollama
+sudo systemctl status ollama  # Linux with systemd
+brew services list | grep ollama  # macOS with Homebrew
 
 # Start Ollama service
-ollama serve
+sudo systemctl start ollama  # Linux
+brew services start ollama   # macOS
+# Or manually:
+ollama serve &
+
+# Test Ollama connection
+ollama list
 ```
 
 #### "Model not found" errors
 ```bash
-# Pull the required model
+# Check available models
+ollama list
+
+# Pull the required model (2GB download)
 ollama pull llama3.2:3b
 
-# List available models
-ollama list
+# Alternative smaller model for low-end systems
+ollama pull llama3.2:1b
+
+# Test model
+ollama run llama3.2:3b "Hello, test message"
 ```
 
 #### Installation Issues
+
+**Windows:**
 ```powershell
-# Windows: Run as Administrator
-# Or use user installation:
+# Run as Administrator (recommended)
+Start-Process powershell -Verb RunAs
+irm https://raw.githubusercontent.com/1111MK1111/NewTerminal-AI/main/install.ps1 | iex
+
+# Or force user installation
 .\install.ps1 -Force
 
-# macOS/Linux: Check permissions
+# Check execution policy
+Get-ExecutionPolicy
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+# Manual winget installation of Ollama
+winget install Ollama.Ollama
+```
+
+**macOS:**
+```bash
+# Check Homebrew installation
+brew --version
+
+# Install Homebrew if missing
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Check permissions
+sudo chmod +x install.sh
+
+# Manual installation steps
+brew install powershell
+brew install ollama
+```
+
+**Linux:**
+```bash
+# Ubuntu/Debian - check package manager
+sudo apt update
+sudo apt install curl wget
+
+# CentOS/RHEL/Fedora
+sudo yum update  # or dnf update
+sudo yum install curl wget
+
+# Check permissions and run
 sudo chmod +x install.sh
 ./install.sh
+
+# Manual PowerShell installation
+# Ubuntu/Debian:
+wget -q https://packages.microsoft.com/config/ubuntu/20.04/packages-microsoft-prod.deb
+sudo dpkg -i packages-microsoft-prod.deb
+sudo apt update
+sudo apt install powershell
 ```
 
 **Performance Tips**
@@ -290,12 +455,40 @@ sudo chmod +x install.sh
 - **Memory**: Ensure Ollama has at least 4GB RAM available
 - **Storage**: Keep 10GB+ free space for model storage
 
+## 📦 GitHub Repository
+
+**Repository**: [https://github.com/1111MK1111/NewTerminal-AI](https://github.com/1111MK1111/NewTerminal-AI)
+
+### Quick Links
+- 🏠 **Home**: [Repository Main Page](https://github.com/1111MK1111/NewTerminal-AI)
+- 📋 **Issues**: [Bug Reports & Feature Requests](https://github.com/1111MK1111/NewTerminal-AI/issues)
+- 💬 **Discussions**: [Community Discussions](https://github.com/1111MK1111/NewTerminal-AI/discussions)
+- 📚 **Wiki**: [Documentation & Guides](https://github.com/1111MK1111/NewTerminal-AI/wiki)
+- 🏷️ **Releases**: [Download Latest Version](https://github.com/1111MK1111/NewTerminal-AI/releases)
+- ⭐ **Star**: [Give us a star if you like the project!](https://github.com/1111MK1111/NewTerminal-AI/stargazers)
+
+### Repository Structure
+```
+NewTerminal-AI/
+├── 📄 NewTerminal-AI.psm1    # Main PowerShell module
+├── 🪟 install.ps1            # Windows installation script
+├── 🐧 install.sh             # macOS/Linux installation script
+├── 📖 README.md              # This documentation
+├── 📋 CHANGELOG.md           # Version history
+├── 🤝 CONTRIBUTING.md        # Contribution guidelines
+├── ⚖️ LICENSE                # MIT License
+├── 📁 docs/                  # Additional documentation
+├── 📁 examples/              # Usage examples
+├── 📁 scripts/               # Helper scripts
+└── 📁 tests/                 # Test files
+```
+
 ## 🤝 Contributing
 
 We welcome contributions! Here's how you can help:
 
-- 🐛 **Report Bugs**: [Create an issue](https://github.com/yourusername/AI-Terminal/issues)
-- 💡 **Suggest Features**: [Start a discussion](https://github.com/yourusername/AI-Terminal/discussions)
+- 🐛 **Report Bugs**: [Create an issue](https://github.com/1111MK1111/NewTerminal-AI/issues)
+- 💡 **Suggest Features**: [Start a discussion](https://github.com/1111MK1111/NewTerminal-AI/discussions)
 - 🔧 **Submit PRs**: See our [Contributing Guide](CONTRIBUTING.md)
 - 📖 **Improve Docs**: Help make our documentation better
 
