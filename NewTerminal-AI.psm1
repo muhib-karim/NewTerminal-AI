@@ -1,652 +1,223 @@
-# NewTerminal-AI PowerShell Module
-# A native AI-powered terminal assistant using Ollama
+# NewTerminal-AI - Enhanced PowerShell Module with Natural Language Interface
+# Version: 2.0 (Fixed)
+# Author: AI Assistant
+# Description: Provides natural language to PowerShell command conversion using local Ollama AI
 
-# Configuration
+# Global variables
 $script:OllamaBaseUrl = "http://localhost:11434"
-$script:DefaultModel = "qwen2.5:0.5b"
-$script:MaxRetries = 3
-$script:TimeoutSeconds = 30
-
-# Enhanced Model Management Configuration
-$script:OptimalModels = @(
-    @{ Name = "qwen2.5:0.5b"; Size = "0.5B"; Speed = "Fast"; Quality = "Good"; Recommended = $true },
-    @{ Name = "llama3.2:1b"; Size = "1B"; Speed = "Fast"; Quality = "Better"; Recommended = $true },
-    @{ Name = "phi3:mini"; Size = "3.8B"; Speed = "Medium"; Quality = "Excellent"; Recommended = $false },
-    @{ Name = "gemma2:2b"; Size = "2B"; Speed = "Fast"; Quality = "Very Good"; Recommended = $true }
-)
-$script:ModelInstallationPath = "$env:USERPROFILE\.ollama\models"
-$script:MinimumDiskSpaceGB = 5
-
-# ANSI Color Codes for better UX
-$script:Colors = @{
-    Green = "`e[32m"
-    Yellow = "`e[33m"
-    Red = "`e[31m"
-    Blue = "`e[34m"
-    Cyan = "`e[36m"
-    Magenta = "`e[35m"
-    Reset = "`e[0m"
-    Bold = "`e[1m"
-}
-
-# System Information Cache
+$script:OllamaModel = "llama3.2:1b"
+$script:UserHistory = @()
 $script:SystemInfo = @{
-    OS = (Get-CimInstance Win32_OperatingSystem).Caption
-    Shell = "PowerShell $($PSVersionTable.PSVersion)"
-    Architecture = $env:PROCESSOR_ARCHITECTURE
-    UserName = $env:USERNAME
-    ComputerName = $env:COMPUTERNAME
-}
-
-function Write-ColorText {
-    param(
-        [string]$Text,
-        [string]$Color = "Reset"
-    )
-    Write-Host "$($script:Colors[$Color])$Text$($script:Colors.Reset)" -NoNewline
+    OS = [System.Environment]::OSVersion.Platform
+    UserName = [System.Environment]::UserName
+    MachineName = [System.Environment]::MachineName
+    PowerShellVersion = $PSVersionTable.PSVersion.ToString()
 }
 
 function Write-AIResponse {
-    param([string]$Message, [string]$Type = "Info")
-    
-    $icon = switch ($Type) {
-        "Success" { "[OK]" }
-        "Warning" { "[WARN]" }
-        "Error" { "[ERROR]" }
-        "Info" { "[AI]" }
-        "Command" { "[CMD]" }
-        default { "[INFO]" }
-    }
-    
-    $color = switch ($Type) {
-        "Success" { "Green" }
-        "Warning" { "Yellow" }
-        "Error" { "Red" }
-        "Info" { "Cyan" }
-        "Command" { "Magenta" }
-        default { "Blue" }
-    }
-    
-    Write-ColorText "$icon " $color
-    Write-ColorText $Message $color
-    Write-Host
-}
-
-function Write-ProgressStatus {
-    <#
-    .SYNOPSIS
-    Displays enhanced progress indicators with icons and colors
-    
-    .DESCRIPTION
-    Provides clear visual feedback for operations with consistent formatting
-    
-    .PARAMETER Message
-    The message to display
-    
-    .PARAMETER Type
-    The type of status (Info, Success, Warning, Error, Progress, Complete)
-    
-    .PARAMETER ShowTime
-    Whether to include timestamp in the output
-    #>
     param(
         [string]$Message,
-        [string]$Type = "Info",
-        [switch]$ShowTime
+        [string]$Type = "info"
     )
     
-    $timestamp = if ($ShowTime) { "[$(Get-Date -Format 'HH:mm:ss')] " } else { "" }
-    
-    $icon = switch ($Type) {
-         "Success" { "[+]" }
-         "Warning" { "[!]" }
-         "Error" { "[X]" }
-         "Progress" { "[>]" }
-         "Complete" { "[*]" }
-         "Download" { "[v]" }
-         "Install" { "[#]" }
-         "Check" { "[?]" }
-         "Config" { "[=]" }
-         "Info" { "[i]" }
-         default { "[*]" }
-     }
-    
-    $color = switch ($Type) {
-        "Success" { "Green" }
-        "Warning" { "Yellow" }
-        "Error" { "Red" }
-        "Progress" { "Blue" }
-        "Complete" { "Green" }
-        "Download" { "Cyan" }
-        "Install" { "Magenta" }
-        "Check" { "Yellow" }
-        "Config" { "Blue" }
-        "Info" { "Cyan" }
-        default { "Blue" }
+    $colors = @{
+        "success" = "Green"
+        "error" = "Red"
+        "warning" = "Yellow"
+        "info" = "Cyan"
+        "command" = "White"
     }
     
-    Write-ColorText "$timestamp$icon " $color
-    Write-ColorText $Message $color
-    Write-Host
-}
-
-function Show-ProgressBar {
-    <#
-    .SYNOPSIS
-    Displays a simple text-based progress bar
+    $color = $colors[$Type.ToLower()]
+    if (-not $color) { $color = "White" }
     
-    .PARAMETER Percent
-    Progress percentage (0-100)
-    
-    .PARAMETER Width
-    Width of the progress bar in characters
-    
-    .PARAMETER Message
-    Optional message to display with the progress bar
-    #>
-    param(
-        [int]$Percent,
-        [int]$Width = 40,
-        [string]$Message = ""
-    )
-    
-    $filled = [math]::Floor($Width * $Percent / 100)
-    $empty = $Width - $filled
-    
-    $bar = "[" + ("█" * $filled) + ("-" * $empty) + "]"
-    $percentText = "$Percent%".PadLeft(4)
-    
-    Write-ColorText "$bar " "Cyan"
-    Write-ColorText $percentText "White"
-    if ($Message) {
-        Write-ColorText " $Message" "Blue"
+    $prefix = switch ($Type.ToLower()) {
+        "success" { "[SUCCESS $(Get-Date -Format 'HH:mm:ss')]" }
+        "error" { "[ERROR $(Get-Date -Format 'HH:mm:ss')]" }
+        "warning" { "[WARN $(Get-Date -Format 'HH:mm:ss')]" }
+        "info" { "[INFO $(Get-Date -Format 'HH:mm:ss')]" }
+        "command" { "[COMMAND $(Get-Date -Format 'HH:mm:ss')]" }
+        default { "[$(Get-Date -Format 'HH:mm:ss')]" }
     }
     
-    Write-Host "`r" -NoNewline
-    
-    if ($Percent -eq 100) {
-        Write-Host "" # New line when complete
-    }
+    Write-Host "$prefix $Message" -ForegroundColor $color
 }
 
 function Test-OllamaConnection {
     try {
         $response = Invoke-RestMethod -Uri "$script:OllamaBaseUrl/api/tags" -Method Get -TimeoutSec 5
-        return $response.models.Count -gt 0
+        return $true
     }
     catch {
         return $false
-    }
-}
-
-function Get-OllamaModels {
-    try {
-        $response = Invoke-RestMethod -Uri "$script:OllamaBaseUrl/api/tags" -Method Get -TimeoutSec 10
-        return $response.models | ForEach-Object { $_.name }
-    }
-    catch {
-        Write-AIResponse "Failed to fetch available models: $($_.Exception.Message)" "Error"
-        return @()
-    }
-}
-
-# Enhanced Model Detection and Management Functions
-function Test-SystemRequirements {
-    param([switch]$Detailed)
-    
-    $requirements = @{
-        OllamaInstalled = $false
-        OllamaRunning = $false
-        SufficientDiskSpace = $false
-        SufficientMemory = $false
-        OptimalModelPresent = $false
-        Details = @{}
-    }
-    
-    # Check if Ollama is installed
-    try {
-        $ollamaPath = Get-Command ollama -ErrorAction SilentlyContinue
-        $requirements.OllamaInstalled = $null -ne $ollamaPath
-        if ($Detailed) { $requirements.Details.OllamaPath = $ollamaPath.Source }
-    } catch {
-        Write-AIResponse "Error running performance optimization: $($_.Exception.Message)" "Error"
-    }
-    
-    # Check if Ollama is running
-    $requirements.OllamaRunning = Test-OllamaConnection
-    
-    # Check disk space
-    try {
-        $drive = Get-WmiObject -Class Win32_LogicalDisk -Filter "DeviceID='C:'"
-        $freeSpaceGB = [math]::Round($drive.FreeSpace / 1GB, 2)
-        $requirements.SufficientDiskSpace = $freeSpaceGB -ge $script:MinimumDiskSpaceGB
-        if ($Detailed) { $requirements.Details.FreeSpaceGB = $freeSpaceGB }
-    } catch { }
-    
-    # Check memory
-    try {
-        $memory = Get-WmiObject -Class Win32_ComputerSystem
-        $totalMemoryGB = [math]::Round($memory.TotalPhysicalMemory / 1GB, 2)
-        $requirements.SufficientMemory = $totalMemoryGB -ge 4
-        if ($Detailed) { $requirements.Details.TotalMemoryGB = $totalMemoryGB }
-    } catch { }
-    
-    # Check for optimal models
-    if ($requirements.OllamaRunning) {
-        $installedModels = Get-OllamaModels
-        $optimalModelNames = $script:OptimalModels | Where-Object { $_.Recommended } | ForEach-Object { $_.Name }
-        $requirements.OptimalModelPresent = ($installedModels | Where-Object { $_ -in $optimalModelNames }).Count -gt 0
-        if ($Detailed) { 
-            $requirements.Details.InstalledModels = $installedModels
-            $requirements.Details.RecommendedModels = $optimalModelNames
-        }
-    }
-    
-    return $requirements
-}
-
-function Install-OptimalModel {
-    <#
-    .SYNOPSIS
-    Installs an optimal AI model for NewTerminal-AI
-    
-    .DESCRIPTION
-    Downloads and installs a recommended AI model based on system capabilities
-    with enhanced progress feedback
-    
-    .PARAMETER PreferredModel
-    Specific model to install (optional, will auto-select if not provided)
-    
-    .PARAMETER Force
-    Force installation even if a model already exists
-    
-    .PARAMETER Quiet
-    Run installation silently without progress output
-    
-    .EXAMPLE
-    Install-OptimalModel
-    
-    .EXAMPLE
-    Install-OptimalModel -PreferredModel "llama3.2:1b" -Force
-    #>
-    param(
-        [string]$PreferredModel = "",
-        [switch]$Force,
-        [switch]$Quiet
-    )
-    
-    if (-not $Quiet) {
-        Write-ProgressStatus "Starting optimal model installation process..." "Install" -ShowTime
-    }
-    
-    # Step 1: Check system requirements
-    if (-not $Quiet) {
-        Write-ProgressStatus "Checking system requirements..." "Check"
-    }
-    $sysReq = Test-SystemRequirements -Detailed
-    
-    if (-not $sysReq.OllamaInstalled) {
-        Write-AIResponse "Ollama is not installed. Please install Ollama first from https://ollama.ai" "Error"
-        return $false
-    }
-    
-    # Step 2: Check Ollama service
-    if (-not $sysReq.OllamaRunning) {
-        if (-not $Quiet) {
-            Write-ProgressStatus "Ollama not running. Starting service..." "Progress"
-        }
-        try {
-            Start-Process "ollama" -ArgumentList "serve" -WindowStyle Hidden
-            
-            # Show progress while waiting for service to start
-            if (-not $Quiet) {
-                for ($i = 1; $i -le 3; $i++) {
-                    Show-ProgressBar -Percent ($i * 33) -Message "Starting Ollama service..."
-                    Start-Sleep -Seconds 1
-                }
-                Show-ProgressBar -Percent 100 -Message "Service started"
-            } else {
-                Start-Sleep -Seconds 3
-            }
-            
-            if (-not (Test-OllamaConnection)) {
-                Write-AIResponse "Failed to start Ollama service" "Error"
-                return $false
-            }
-            if (-not $Quiet) {
-                Write-ProgressStatus "Ollama service started successfully" "Success"
-            }
-        } catch {
-            Write-AIResponse "Failed to start Ollama: $($_.Exception.Message)" "Error"
-            return $false
-        }
-    } else {
-        if (-not $Quiet) {
-            Write-ProgressStatus "Ollama service is running" "Success"
-        }
-    }
-    
-    if (-not $sysReq.SufficientDiskSpace) {
-        Write-AIResponse "Insufficient disk space. Need at least $($script:MinimumDiskSpaceGB)GB free" "Error"
-        return $false
-    }
-    
-    # Step 3: Check existing models
-    if (-not $Quiet) {
-        Write-ProgressStatus "Scanning for existing models..." "Check"
-    }
-    if (-not $Force) {
-        $currentModels = Get-OllamaModels
-        if ($currentModels -and $currentModels.Count -gt 0) {
-            # Check if we have an optimal model
-            $optimalFound = $false
-            $optimalModelNames = $script:OptimalModels | Where-Object { $_.Recommended } | ForEach-Object { $_.Name }
-            foreach ($model in $currentModels) {
-                if ($model -in $optimalModelNames) {
-                    if (-not $Quiet) {
-                        Write-ProgressStatus "Optimal model already installed: $model" "Success"
-                    }
-                    $optimalFound = $true
-                    break
-                }
-            }
-            
-            if ($optimalFound -and [string]::IsNullOrEmpty($PreferredModel)) {
-                if (-not $Quiet) {
-                    Write-ProgressStatus "Installation skipped - optimal model already present. Use -Force to reinstall." "Complete"
-                }
-                return $true
-            }
-        }
-    }
-    
-    # Step 4: Determine best model to install
-    $targetModel = $PreferredModel
-    if ([string]::IsNullOrEmpty($targetModel)) {
-        if (-not $Quiet) {
-            Write-ProgressStatus "Auto-selecting optimal model based on system..." "Config"
-        }
-        
-        # Enhanced system capability detection
-        try {
-            $memory = Get-WmiObject -Class Win32_ComputerSystem
-            $totalMemoryGB = [math]::Round($memory.TotalPhysicalMemory / 1GB, 2)
-            
-            if ($totalMemoryGB -ge 16) {
-                 $targetModel = "phi3:mini"  # Best quality for high-memory systems
-                 if (-not $Quiet) {
-                     Write-ProgressStatus "High memory detected ($totalMemoryGB GB) - selected: $targetModel" "Config"
-                 }
-             } elseif ($totalMemoryGB -ge 8) {
-                 $targetModel = "llama3.2:1b"  # Balanced for medium-memory systems
-                 if (-not $Quiet) {
-                     Write-ProgressStatus "Medium memory detected ($totalMemoryGB GB) - selected: $targetModel" "Config"
-                 }
-             } else {
-                 $recommendedModels = $script:OptimalModels | Where-Object { $_.Recommended } | Sort-Object { $_.Size }
-                 $targetModel = $recommendedModels[0].Name
-                 if (-not $Quiet) {
-                     Write-ProgressStatus "Lower memory detected ($totalMemoryGB GB) - selected: $targetModel" "Config"
-                 }
-             }
-        } catch {
-            $recommendedModels = $script:OptimalModels | Where-Object { $_.Recommended } | Sort-Object { $_.Size }
-            $targetModel = $recommendedModels[0].Name
-            if (-not $Quiet) {
-                Write-ProgressStatus "Could not detect system specs - using safe default: $targetModel" "Config"
-            }
-        }
-    } else {
-        if (-not $Quiet) {
-            Write-ProgressStatus "Using specified model: $targetModel" "Config"
-        }
-    }
-    
-    # Step 5: Download and install model
-    if (-not $Quiet) {
-        Write-ProgressStatus "Downloading model: $targetModel" "Download"
-        Write-ProgressStatus "This may take several minutes depending on your internet connection..." "Info"
-    }
-    
-    # Install the model
-    try {
-        # Start the installation process
-        $installProcess = Start-Process "ollama" -ArgumentList "pull", $targetModel -PassThru -NoNewWindow
-        
-        # Show progress animation while downloading
-        if (-not $Quiet) {
-            $progressChars = @('|', '/', '-', '\\')
-            $charIndex = 0
-            
-            while (-not $installProcess.HasExited) {
-                $char = $progressChars[$charIndex % $progressChars.Length]
-                Write-Host "`r$($script:Colors.Cyan)[$char]$($script:Colors.Reset) Downloading $targetModel..." -NoNewline
-                Start-Sleep -Milliseconds 500
-                $charIndex++
-            }
-            
-            Write-Host "" # New line
-        } else {
-            $installProcess.WaitForExit()
-        }
-        
-        if ($installProcess.ExitCode -eq 0) {
-            if (-not $Quiet) {
-                Write-ProgressStatus "Successfully downloaded model: $targetModel" "Success"
-                
-                # Step 6: Test the installed model
-                Write-ProgressStatus "Testing installed model..." "Check"
-                
-                # Show test progress
-                for ($i = 1; $i -le 3; $i++) {
-                    Show-ProgressBar -Percent ($i * 33) -Message "Running model test..."
-                    Start-Sleep -Milliseconds 500
-                }
-                Show-ProgressBar -Percent 100 -Message "Test complete"
-            }
-            
-            # Test the model
-            try {
-                $testResult = Invoke-OllamaAPI -Prompt "Hello" -Model $targetModel
-                if ($testResult) {
-                    if (-not $Quiet) {
-                        Write-ProgressStatus "Model installation and test completed successfully!" "Complete"
-                        Write-ProgressStatus "Model '$targetModel' is ready for use" "Success"
-                    }
-                    $script:DefaultModel = $targetModel
-                    return $true
-                } else {
-                    Write-AIResponse "Model installed but test failed" "Warning"
-                    $script:DefaultModel = $targetModel
-                    return $false
-                }
-            } catch {
-                Write-AIResponse "Model installed but test failed: $($_.Exception.Message)" "Warning"
-                $script:DefaultModel = $targetModel
-                return $false
-            }
-        } else {
-            Write-AIResponse "Failed to install model: $targetModel (Exit code: $($installProcess.ExitCode))" "Error"
-            return $false
-        }
-    } catch {
-        Write-AIResponse "Error during model installation: $($_.Exception.Message)" "Error"
-        return $false
-    }
-}
-
-function Optimize-ModelConfiguration {
-    param([switch]$RemoveOutdated)
-    
-    Write-AIResponse "Analyzing current model configuration..." "Info"
-    
-    $installedModels = Get-OllamaModels
-    $optimalModelNames = $script:OptimalModels | ForEach-Object { $_.Name }
-    
-    # Identify outdated or suboptimal models
-    $outdatedModels = $installedModels | Where-Object { 
-        $_ -notin $optimalModelNames -and 
-        ($_ -like "*:latest" -or $_ -like "*:7b" -or $_ -like "*:13b" -or $_ -like "*:70b")
-    }
-    
-    if ($outdatedModels.Count -gt 0) {
-        Write-AIResponse "Found potentially outdated models: $($outdatedModels -join ', ')" "Warning"
-        
-        if ($RemoveOutdated) {
-            foreach ($model in $outdatedModels) {
-                Write-AIResponse "Removing outdated model: $model" "Info"
-                try {
-                    $removeProcess = Start-Process "ollama" -ArgumentList "rm", $model -Wait -PassThru -NoNewWindow
-                    if ($removeProcess.ExitCode -eq 0) {
-                        Write-AIResponse "Removed: $model" "Success"
-                    }
-                } catch {
-                    Write-AIResponse "Failed to remove $model`: $($_.Exception.Message)" "Warning"
-                }
-            }
-        } else {
-            Write-AIResponse "Use -RemoveOutdated to automatically remove these models" "Info"
-        }
-    }
-    
-    # Check if we have at least one optimal model
-    $hasOptimalModel = ($installedModels | Where-Object { $_ -in ($script:OptimalModels | Where-Object { $_.Recommended } | ForEach-Object { $_.Name }) }).Count -gt 0
-    
-    if (-not $hasOptimalModel) {
-        Write-AIResponse "No optimal models found. Installing recommended model..." "Warning"
-        Install-OptimalModel
-    } else {
-        Write-AIResponse "Model configuration is optimal" "Success"
-    }
-}
-
-function Start-AutoSetup {
-    param([switch]$Force)
-    
-    Write-AIResponse "NewTerminal AI Auto-Setup Starting..." "Info"
-    Write-AIResponse "Scanning system configuration..." "Info"
-    
-    $requirements = Test-SystemRequirements -Detailed
-    
-    # Display system status
-    Write-AIResponse "System Requirements Check:" "Info"
-    Write-Host "  Ollama Installed: $(if($requirements.OllamaInstalled){'✓'}else{'✗'})" -ForegroundColor $(if($requirements.OllamaInstalled){'Green'}else{'Red'})
-    Write-Host "  Ollama Running: $(if($requirements.OllamaRunning){'✓'}else{'✗'})" -ForegroundColor $(if($requirements.OllamaRunning){'Green'}else{'Red'})
-    Write-Host "  Sufficient Disk Space: $(if($requirements.SufficientDiskSpace){'✓'}else{'✗'})" -ForegroundColor $(if($requirements.SufficientDiskSpace){'Green'}else{'Red'})
-    Write-Host "  Sufficient Memory: $(if($requirements.SufficientMemory){'✓'}else{'✗'})" -ForegroundColor $(if($requirements.SufficientMemory){'Green'}else{'Red'})
-    Write-Host "  Optimal Model Present: $(if($requirements.OptimalModelPresent){'✓'}else{'✗'})" -ForegroundColor $(if($requirements.OptimalModelPresent){'Green'}else{'Red'})
-    Write-Host
-    
-    # Auto-fix issues
-    $needsSetup = -not ($requirements.OllamaRunning -and $requirements.OptimalModelPresent)
-    
-    if ($needsSetup -or $Force) {
-        if (-not $requirements.OptimalModelPresent) {
-            Write-AIResponse "Setting up optimal AI model for best performance..." "Info"
-            $success = Install-OptimalModel
-            if ($success) {
-                Write-AIResponse "Auto-setup completed successfully!" "Success"
-                Write-AIResponse "NewTerminal AI is ready to use. Type 'warp' to start!" "Success"
-            } else {
-                Write-AIResponse "Auto-setup encountered issues. Please check the errors above." "Warning"
-            }
-        } else {
-            Write-AIResponse "Optimizing existing model configuration..." "Info"
-            Optimize-ModelConfiguration
-        }
-    } else {
-        Write-AIResponse "System is already optimally configured!" "Success"
-        Write-AIResponse "NewTerminal AI is ready to use. Type 'warp' to start!" "Success"
     }
 }
 
 function Invoke-OllamaAPI {
     param(
         [string]$Prompt,
-        [string]$Model = $script:DefaultModel,
-        [string]$SystemPrompt = ""
+        [string]$SystemPrompt = "",
+        [string]$Model = $script:OllamaModel
     )
     
     $body = @{
         model = $Model
         prompt = $Prompt
+        system = $SystemPrompt
         stream = $false
         options = @{
             temperature = 0.1
             top_p = 0.9
-            max_tokens = 1000
+            num_predict = 1000
         }
-    }
-    
-    if ($SystemPrompt) {
-        $body.system = $SystemPrompt
-    }
+    } | ConvertTo-Json -Depth 3
     
     try {
-        $response = Invoke-RestMethod -Uri "$script:OllamaBaseUrl/api/generate" -Method Post -Body ($body | ConvertTo-Json -Depth 10) -ContentType "application/json" -TimeoutSec $script:TimeoutSeconds
+        $response = Invoke-RestMethod -Uri "$script:OllamaBaseUrl/api/generate" -Method Post -Body $body -ContentType "application/json" -TimeoutSec 30
         return $response.response
     }
     catch {
-        throw "Ollama API Error: $($_.Exception.Message)"
+        throw "Ollama API call failed: $($_.Exception.Message)"
     }
 }
 
-function Get-SystemContext {
+function Show-ThinkingAnimation {
+    param(
+        [string]$Message = "Thinking",
+        [int]$DurationMs = 2000
+    )
+    
+    $frames = @("[*]", "[+]", "[x]", "[+]")
+    $startTime = Get-Date
+    $frameIndex = 0
+    
+    while ((Get-Date) - $startTime -lt [TimeSpan]::FromMilliseconds($DurationMs)) {
+        Write-Host "`r$($frames[$frameIndex]) $Message..." -NoNewline -ForegroundColor Yellow
+        Start-Sleep -Milliseconds 200
+        $frameIndex = ($frameIndex + 1) % $frames.Length
+    }
+    
+    Write-Host "`r" -NoNewline
+    Write-Host (" " * ($Message.Length + 20)) -NoNewline
+    Write-Host "`r" -NoNewline
+}
+
+function Get-ContextInfo {
     $currentPath = Get-Location
-    $recentFiles = Get-ChildItem -Path $currentPath -File | Select-Object -First 5 | ForEach-Object { $_.Name }
-    $runningProcesses = Get-Process | Select-Object -First 10 | ForEach-Object { $_.ProcessName }
+    $pathType = "General Directory"
+    $gitBranch = $null
+    $gitStatus = $null
     
-    $contextInfo = "Current System Context:`n"
-    $contextInfo += "Operating System: $($script:SystemInfo.OS)`n"
-    $contextInfo += "Shell: $($script:SystemInfo.Shell)`n"
-    $contextInfo += "Current Directory: $currentPath`n"
-    $contextInfo += "Recent Files: $($recentFiles -join ', ')`n"
-    $contextInfo += "Top Processes: $($runningProcesses -join ', ')`n"
-    $contextInfo += "User: $($script:SystemInfo.UserName)@$($script:SystemInfo.ComputerName)"
+    if (Test-Path ".git") {
+        $pathType = "Git Repository"
+        try {
+            $gitBranch = (git branch --show-current 2>$null).Trim()
+            $gitStatusOutput = git status --porcelain 2>$null
+            $gitStatus = if ($gitStatusOutput) { "Modified files present" } else { "Clean" }
+        }
+        catch {
+            $gitBranch = "unknown"
+            $gitStatus = "unknown"
+        }
+    }
+    elseif (Test-Path "package.json") {
+        $pathType = "Node.js Project"
+    }
+    elseif (Test-Path "*.sln" -or Test-Path "*.csproj") {
+        $pathType = ".NET Project"
+    }
+    elseif (Test-Path "requirements.txt" -or Test-Path "*.py") {
+        $pathType = "Python Project"
+    }
     
-    return $contextInfo
+    return @{
+        Path = $currentPath.Path
+        PathType = $pathType
+        GitBranch = $gitBranch
+        GitStatus = $gitStatus
+    }
 }
 
 function Get-CommandSuggestion {
     param(
-        [string]$UserRequest,
-        [switch]$IncludeExplanation
+        [string]$NaturalLanguage
     )
     
-    $systemPrompt = @"
-You are an expert PowerShell and Windows command-line assistant. Your job is to generate ONLY the exact command(s) that should be executed to fulfill the user's request.
-
-IMPORTANT RULES:
-1. Return ONLY the command(s) to execute, nothing else
-2. Use PowerShell syntax when possible
-3. For multiple commands, separate with semicolons or use pipeline
-4. Ensure commands are safe and won't cause system damage
-5. Use full parameter names when clarity is important
-6. If the request is unclear, provide the most likely interpretation
-
-System Information:
-$($script:SystemInfo.OS)
-Shell: $($script:SystemInfo.Shell)
-Current User: $($script:SystemInfo.UserName)
-
-Current Context:
-$(Get-SystemContext)
-"@
+    $context = Get-ContextInfo
     
-    if ($IncludeExplanation) {
-        $systemPrompt += "
-
-For this request, provide the command followed by a brief explanation in this format:
-COMMAND: [exact command here]
-EXPLANATION: [brief explanation]"
+    # Check if user is asking about the AI model
+    if ($NaturalLanguage -match "(?i)(what|which|tell me|show me).*(model|llm|ai model|language model).*using" -or 
+        $NaturalLanguage -match "(?i)(model|llm|ai model|language model).*(are you|is this|am i).*using" -or
+        $NaturalLanguage -match "(?i)what.*model.*this" -or
+        $NaturalLanguage -match "(?i)which.*model.*running") {
+        return "Write-Host 'Current AI Model: $script:OllamaModel' -ForegroundColor Green"
     }
     
+    $systemPrompt = @"
+You are a PowerShell command generator. Convert natural language requests into PowerShell commands.
+
+CRITICAL: Return ONLY the PowerShell command. No explanations, no markdown, no code blocks, no additional text.
+
+Rules:
+1. Generate ONLY the PowerShell command, nothing else
+2. NO markdown formatting (no ```, no code blocks)
+3. NO explanations or descriptions
+4. Use simple, direct PowerShell cmdlets when possible
+5. For common tasks, prefer these patterns:
+   - Date/time: Get-Date
+   - File listing: Get-ChildItem or ls
+   - Disk space: Get-PSDrive -PSProvider FileSystem | Select-Object Name,Used,Free,@{Name='Size(GB)';Expression={[math]::Round((`$_.Used+`$_.Free)/1GB,2)}},@{Name='FreeSpace(GB)';Expression={[math]::Round(`$_.Free/1GB,2)}}
+   - Disk usage simple: Get-PSDrive -PSProvider FileSystem
+   - Processes: Get-Process
+   - Services: Get-Service
+   - System info: Get-ComputerInfo
+   - Network info: Get-NetIPAddress
+   - Current user: whoami
+   - System uptime: (Get-CimInstance Win32_OperatingSystem).LastBootUpTime
+   - Create file: New-Item -ItemType File -Name "filename.ext"
+   - Create empty file: New-Item -ItemType File -Path "filename.ext" -Force
+   - Write to file: "content" | Out-File -FilePath "filename.ext"
+   - Find/search file: Get-ChildItem -Name "filename*" -Recurse
+   - Check if file exists: Test-Path "filename.ext"
+   - Read file content: Get-Content "filename.ext"
+   - Delete file: Remove-Item "filename.ext"
+   - Copy file: Copy-Item "source.ext" "destination.ext"
+   - Move/rename file: Move-Item "old.ext" "new.ext"
+6. Avoid complex WMI queries unless specifically needed
+7. Use PowerShell 5+ compatible syntax
+8. Generate complete, working commands
+9. For disk space, always show human-readable format
+10. For file operations, always use appropriate cmdlets (New-Item, Get-ChildItem, Test-Path, etc.)
+
+System Context:
+OS: $($script:SystemInfo.OS)
+Current Directory: $($context.Path)
+Directory Type: $($context.PathType)
+
+Examples:
+Input: "show disk space"
+Output: Get-PSDrive -PSProvider FileSystem
+
+Input: "create a file named test.txt"
+Output: New-Item -ItemType File -Name "test.txt"
+
+Input: "find file test.txt"
+Output: Get-ChildItem -Name "test.txt" -Recurse
+
+Input: "list all files"
+Output: Get-ChildItem
+"@
+
+    if ($context.GitBranch) {
+        $systemPrompt += "`nGit Branch: $($context.GitBranch) ($($context.GitStatus))"
+    }
+
     try {
-        $response = Invoke-OllamaAPI -Prompt $UserRequest -SystemPrompt $systemPrompt
+        $response = Invoke-OllamaAPI -Prompt $NaturalLanguage -SystemPrompt $systemPrompt
         return $response.Trim()
     }
     catch {
-        throw "Failed to generate command suggestion: $($_.Exception.Message)"
+        throw "Failed to generate command: $($_.Exception.Message)"
     }
 }
 
@@ -654,14 +225,17 @@ function Test-CommandSafety {
     param([string]$Command)
     
     $dangerousPatterns = @(
-        'rm\s+-rf\s+/',
-        'del\s+/s\s+/q\s+c:\\',
-        'format\s+c:',
-        'shutdown\s+/s',
-        'reg\s+delete.*HKLM',
         'Remove-Item.*-Recurse.*-Force.*C:\\',
+        'rm\s+-rf\s+/',
+        'del\s+/s\s+/q\s+c:',
+        'format\s+c:',
+        'shutdown',
+        'restart',
         'Stop-Computer',
-        'Restart-Computer'
+        'Restart-Computer',
+        'reg\s+delete.*HKLM',
+        'Remove-Item.*\$env:SystemRoot',
+        'Remove-Item.*\$env:ProgramFiles'
     )
     
     foreach ($pattern in $dangerousPatterns) {
@@ -673,563 +247,295 @@ function Test-CommandSafety {
     return $true
 }
 
-# Natural Language Processing Function
-function Start-NaturalLanguageMode {
-    Write-AIResponse "Natural Language Mode Activated!" "Success"
-    Write-AIResponse "Type naturally - no quotes needed! Type 'exit-nl' to return to normal mode." "Info"
-    Write-Host
-    
-    while ($true) {
-        Write-Host "$(Get-Location)> " -NoNewline -ForegroundColor Green
-        $input = Read-Host
-        
-        if ($input -eq "exit-nl" -or $input -eq "exit") {
-            Write-AIResponse "Exiting Natural Language Mode" "Info"
-            break
-        }
-        
-        if ([string]::IsNullOrWhiteSpace($input)) {
-            continue
-        }
-        
-        # Check if it's a standard PowerShell command first
-        $isStandardCommand = $false
-        try {
-            $command = Get-Command $input.Split(' ')[0] -ErrorAction SilentlyContinue
-            if ($command) {
-                $isStandardCommand = $true
-            }
-        }
-        catch { }
-        
-        if ($isStandardCommand) {
-            # Execute standard PowerShell command
-            try {
-                Invoke-Expression $input
-            }
-            catch {
-                Write-AIResponse "Error: $($_.Exception.Message)" "Error"
-            }
-        }
-        else {
-            # Process as natural language
-            Process-NaturalLanguageInput -UserInput $input -AutoExecute
-        }
-        
-        Write-Host
-    }
-}
-
-# Warp AI-style natural language to command conversion with immediate execution
-function Convert-NaturalLanguageToCommand {
-    param([string]$UserInput)
-    
-    try {
-        # Show thinking indicator (like Warp AI)
-        Write-Host "🤔 " -NoNewline -ForegroundColor Yellow
-        Write-Host "Converting..." -NoNewline -ForegroundColor Gray
-        
-        # Get command suggestion from AI
-        $suggestion = Get-CommandSuggestion -UserInput $UserInput
-        
-        if ($suggestion) {
-            # Clear the thinking line and show the command
-            Write-Host "`r" -NoNewline
-            Write-Host "💡 " -NoNewline -ForegroundColor Green
-            Write-Host $suggestion -ForegroundColor Cyan
-            
-            # Execute immediately if safe (Warp AI style)
-            if (Test-CommandSafety -Command $suggestion) {
-                try {
-                    # Execute the command
-                    Invoke-Expression $suggestion
-                }
-                catch {
-                    Write-Host "❌ Execution failed: $($_.Exception.Message)" -ForegroundColor Red
-                }
-            }
-            else {
-                Write-Host "⚠️  Command flagged as potentially unsafe - skipped execution" -ForegroundColor Yellow
-                Write-Host "   Generated: $suggestion" -ForegroundColor Gray
-            }
-        }
-        else {
-            Write-Host "`r" -NoNewline
-            Write-Host "❓ Could not understand: '$UserInput'" -ForegroundColor Red
-            Write-Host "   Try rephrasing your request" -ForegroundColor Gray
-        }
-    }
-    catch {
-        Write-Host "`r" -NoNewline
-        Write-Host "❌ Error: $($_.Exception.Message)" -ForegroundColor Red
-    }
-}
-
-function Process-NaturalLanguageInput {
+function Add-ToHistory {
     param(
-        [string]$UserInput,
-        [switch]$AutoExecute
+        [string]$Request,
+        [string]$Command,
+        [bool]$Executed
     )
     
-    # Determine if this is a question or a command request
-    $questionWords = @('what', 'how', 'why', 'when', 'where', 'who', 'explain', 'tell me', 'help me understand')
-    $isQuestion = $false
-    
-    foreach ($word in $questionWords) {
-        if ($UserInput.ToLower().Contains($word.ToLower())) {
-            $isQuestion = $true
-            break
-        }
+    $entry = @{
+        Timestamp = Get-Date
+        Request = $Request
+        Command = $Command
+        Executed = $Executed
+        Context = Get-ContextInfo
     }
     
-    if ($isQuestion) {
-        # Process as a question
-        Write-AIResponse "Processing question..." "Info"
-        Ask-AI -Question $UserInput
+    $script:UserHistory += $entry
+    
+    # Keep only last 50 entries
+    if ($script:UserHistory.Count -gt 50) {
+        $script:UserHistory = $script:UserHistory | Select-Object -Last 50
     }
-    else {
-        # Process as a command request
-        if ($AutoExecute) {
-            # Use Warp AI-style conversion for auto-execute mode
-            Convert-NaturalLanguageToCommand -UserInput $UserInput
-        }
-        else {
-            # Original behavior for non-auto-execute mode
-            Write-AIResponse "Generating command..." "Info"
+}
+
+function Show-CommandHistory {
+    param([int]$Last = 10)
+    
+    if ($script:UserHistory.Count -eq 0) {
+        Write-AIResponse "No command history available" "info"
+        return
+    }
+    
+    $recentHistory = $script:UserHistory | Select-Object -Last $Last
+    
+    Write-AIResponse "Recent Command History:" "info"
+    Write-Host ""
+    
+    for ($i = 0; $i -lt $recentHistory.Count; $i++) {
+        $entry = $recentHistory[$i]
+        if ($entry -and $entry.Timestamp) {
+            $status = if ($entry.Executed) { "[OK]" } else { "[FAIL]" }
+            $timeStr = $entry.Timestamp.ToString("HH:mm:ss")
             
-            try {
-                $suggestion = Get-CommandSuggestion -UserRequest $UserInput
-                
-                Write-AIResponse "Generated Command:" "Command"
-                Write-Host "  $suggestion" -ForegroundColor White
-                
-                # Auto-execute safe commands, prompt for potentially dangerous ones
-                if (Test-CommandSafety -Command $suggestion) {
-                    # Prompt for confirmation in regular mode
-                    Write-AIResponse "Execute? (Y/n/explain): " "Warning" 
-                    $response = Read-Host
-                    
-                    if ($response -eq "" -or $response -match '^[Yy]') {
-                        Write-AIResponse "Executing..." "Info"
-                        try {
-                            Invoke-Expression $suggestion
-                            Write-AIResponse "Done!" "Success"
-                        }
-                        catch {
-                            Write-AIResponse "Error: $($_.Exception.Message)" "Error"
-                        }
-                    }
-                    elseif ($response -match '^[Ee]') {
-                        # Provide explanation
-                        $explanation = Get-CommandExplanation -Command $suggestion
-                        Write-AIResponse "Explanation: $explanation" "Info"
-                    }
-                }
-                else {
-                    Write-AIResponse "This command requires manual confirmation (potentially dangerous)" "Warning"
-                    Write-AIResponse "Type 'yes-execute' to run it anyway:" "Warning"
-                    $confirmation = Read-Host
-                    if ($confirmation -eq "yes-execute") {
-                        try {
-                            Invoke-Expression $suggestion
-                            Write-AIResponse "Done!" "Success"
-                        }
-                        catch {
-                            Write-AIResponse "Error: $($_.Exception.Message)" "Error"
-                        }
-                    }
-                }
+            Write-Host "[$($i+1)] " -NoNewline -ForegroundColor Cyan
+            Write-Host "$status " -NoNewline
+            Write-Host "$timeStr " -NoNewline -ForegroundColor Gray
+            Write-Host "'$($entry.Request)'" -ForegroundColor Yellow
+            Write-Host "    -> " -NoNewline -ForegroundColor Gray
+            Write-Host "$($entry.Command)" -ForegroundColor White
+            
+            if ($entry.Context -and $entry.Context.PathType -ne "General Directory") {
+                Write-Host "    [DIR] $($entry.Context.PathType)" -ForegroundColor DarkGray
             }
-            catch {
-                Write-AIResponse "Error processing request: $($_.Exception.Message)" "Error"
-            }
+            Write-Host ""
         }
     }
 }
 
-function Get-CommandExplanation {
-    param([string]$Command)
-    
-    $systemPrompt = "Explain what this PowerShell command does in simple terms: $Command"
-    
-    try {
-        $response = Invoke-OllamaAPI -Prompt $Command -SystemPrompt $systemPrompt
-        return $response.Trim()
-    }
-    catch {
-        return "Unable to generate explanation at this time."
-    }
+function Clear-CommandHistory {
+    $script:UserHistory = @()
+    Write-AIResponse "Command history cleared" "success"
 }
 
 function Invoke-AICommand {
     param(
-        [Parameter(Mandatory = $true, ValueFromRemainingArguments = $true)]
-        [string[]]$Request,
-        [switch]$Execute,
-        [switch]$Explain,
-        [switch]$Force
+        [string]$NaturalLanguage,
+        [switch]$AutoExecute,
+        [switch]$CleanOutput
     )
     
-    # Join all request parameters into a single string
-    $RequestString = $Request -join ' '
-    
-    # Check Ollama connection
-    if (-not (Test-OllamaConnection)) {
-        Write-AIResponse "Ollama is not running or accessible at $script:OllamaBaseUrl" "Error"
-        Write-AIResponse "Please start Ollama and ensure the model '$script:DefaultModel' is available" "Info"
+    if (-not $NaturalLanguage.Trim()) {
+        if (-not $CleanOutput) {
+            Write-AIResponse "Please provide a command request" "warning"
+        }
         return
     }
     
-    Write-AIResponse "Analyzing request: '$RequestString'" "Info"
-    
-    try {
-        # Generate command suggestion
-        $suggestion = Get-CommandSuggestion -UserRequest $RequestString -IncludeExplanation:$Explain
-        
-        if ($Explain -and $suggestion -match "COMMAND:\s*(.+?)\s*EXPLANATION:\s*(.+)") {
-            $command = $matches[1].Trim()
-            $explanation = $matches[2].Trim()
-            
-            Write-AIResponse "Generated Command:" "Command"
-            Write-ColorText "  $command" "Bold"
-            Write-Host
-            Write-AIResponse "Explanation: $explanation" "Info"
-        }
-        else {
-            $command = $suggestion
-            Write-AIResponse "Generated Command:" "Command"
-            Write-ColorText "  $command" "Bold"
-            Write-Host
-        }
-        
-        # Safety check
-        if (-not (Test-CommandSafety $command)) {
-            Write-AIResponse "WARNING: This command may be potentially dangerous!" "Warning"
-            if (-not $Force) {
-                $confirmation = Read-Host "Do you want to proceed anyway? (type 'yes' to confirm)"
-                if ($confirmation -ne "yes") {
-                    Write-AIResponse "Command execution cancelled for safety" "Info"
-                    return
-                }
-            }
-        }
-        
-        # Execute if requested
-        if ($Execute) {
-            if (-not $Force) {
-                Write-AIResponse "Execute this command? (Y/N)" "Warning"
-                $confirmation = Read-Host
-                if ($confirmation -notmatch '^[Yy]') {
-                    Write-AIResponse "Command execution cancelled" "Info"
-                    return
-                }
-            }
-            
-            Write-AIResponse "Executing command..." "Info"
-            try {
-                Invoke-Expression $command
-                Write-AIResponse "Command executed successfully" "Success"
-            }
-            catch {
-                Write-AIResponse "Command execution failed: $($_.Exception.Message)" "Error"
-            }
-        }
-        else {
-            Write-AIResponse "Use -Execute to run this command, or copy and paste it manually" "Info"
-        }
-    }
-    catch {
-        Write-AIResponse "Error generating command: $($_.Exception.Message)" "Error"
-    }
-}
-
-function Ask-AI {
-    param(
-        [Parameter(Mandatory = $true, ValueFromRemainingArguments = $true)]
-        [string[]]$Question
-    )
-    
-    # Join all question parameters into a single string
-    $QuestionString = $Question -join ' '
-    
+    # Silent connection check for clean output mode
     if (-not (Test-OllamaConnection)) {
-        Write-AIResponse "Ollama is not running or accessible" "Error"
+        if ($CleanOutput) {
+            Write-Host "⚠️  Ollama not running" -ForegroundColor Yellow
+        } else {
+            Write-AIResponse "Ollama is not running. Please start Ollama first." "error"
+            Write-AIResponse "Tip: Run 'ollama serve' in another terminal" "info"
+        }
         return
     }
     
-    $systemPrompt = @"
-You are a helpful AI assistant with expertise in Windows, PowerShell, and system administration.
-Provide clear, accurate, and helpful responses to user questions.
-If the question is about commands or technical procedures, provide step-by-step guidance.
-
-System Context:
-$(Get-SystemContext)
-"@
-    
-    try {
-        Write-AIResponse "Thinking..." "Info"
-        $response = Invoke-OllamaAPI -Prompt $QuestionString -SystemPrompt $systemPrompt
-        Write-AIResponse "AI Response:" "Info"
-        Write-Host $response
+    if (-not $CleanOutput) {
+        $context = Get-ContextInfo
+        Write-AIResponse "Context: $($context.PathType)" "info"
+        if ($context.GitBranch) {
+            Write-AIResponse "Git: $($context.GitBranch) - $($context.GitStatus)" "info"
+        }
+        Show-ThinkingAnimation -Message "Analyzing your request" -DurationMs 1500
     }
-    catch {
-        Write-AIResponse "Error getting AI response: $($_.Exception.Message)" "Error"
+    
+    $command = Get-CommandSuggestion -NaturalLanguage $NaturalLanguage
+    
+    if (-not $command) {
+        if ($CleanOutput) {
+            Write-Host "❌ Could not understand: '$NaturalLanguage'" -ForegroundColor Red
+        } else {
+            Write-AIResponse "Could not generate command for: '$NaturalLanguage'" "error"
+            Write-AIResponse "Tip: Try rephrasing your request or being more specific" "info"
+        }
+        Add-ToHistory -Request $NaturalLanguage -Command "" -Executed $false
+        return
+    }
+    
+    $command = $command.Trim()
+    $command = $command -replace '^```.*$', '' -replace '^```$', ''
+    $command = $command.Trim()
+    
+    if (-not $CleanOutput) {
+        Write-AIResponse "Generated Command:" "command"
+        Write-Host "    $command" -ForegroundColor White -BackgroundColor DarkBlue
+        Write-Host ""
+    }
+    
+    if (-not (Test-CommandSafety -Command $command)) {
+        if ($CleanOutput) {
+            Write-Host "⚠️  Potentially harmful command detected" -ForegroundColor Red
+            Write-Host "   $command" -ForegroundColor Yellow
+        } else {
+            Write-AIResponse "DANGER: Command flagged as potentially harmful!" "warning"
+            Write-Host "    $command" -ForegroundColor White -BackgroundColor DarkRed
+            Write-AIResponse "Please review carefully before proceeding" "warning"
+        }
+        Add-ToHistory -Request $NaturalLanguage -Command $command -Executed $false
+        return
+    }
+    
+    if ($AutoExecute) {
+        # Show the command being executed for educational purposes
+        if ($CleanOutput) {
+            Write-Host "💻 " -NoNewline -ForegroundColor Cyan
+            Write-Host "$command" -ForegroundColor Yellow
+        }
+        
+        try {
+            # Execute command and capture output
+            $result = Invoke-Expression $command 2>&1
+            
+            # Display the command output in clean format
+            if ($result) {
+                $result | ForEach-Object { 
+                    Write-Host $_ 
+                }
+            }
+            
+            # Only show status for non-clean output or errors
+            if (-not $CleanOutput) {
+                if ($LASTEXITCODE -eq 0 -or $null -eq $LASTEXITCODE) {
+                    Write-AIResponse "Command executed successfully" "success"
+                } else {
+                    Write-AIResponse "Command completed with exit code: $LASTEXITCODE" "warning"
+                }
+            } elseif ($LASTEXITCODE -ne 0 -and $null -ne $LASTEXITCODE) {
+                Write-Host "❌ Exit code: $LASTEXITCODE" -ForegroundColor Red
+            }
+            
+            Add-ToHistory -Request $NaturalLanguage -Command $command -Executed $true
+        } catch {
+            if ($CleanOutput) {
+                Write-Host "❌ $($_.Exception.Message)" -ForegroundColor Red
+            } else {
+                Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
+                Write-AIResponse "Execution failed" "error"
+            }
+            Add-ToHistory -Request $NaturalLanguage -Command $command -Executed $false
+        }
+    } else {
+        $confirmation = Read-Host "Execute this command? [y/N/e(dit)]"
+        
+        switch ($confirmation.ToLower()) {
+            'y' {
+                Write-AIResponse "Executing command..." "info"
+                try {
+                    Invoke-Expression $command
+                    Write-AIResponse "Command executed successfully" "success"
+                    Add-ToHistory -Request $NaturalLanguage -Command $command -Executed $true
+                } catch {
+                    Write-AIResponse "Execution failed: $($_.Exception.Message)" "error"
+                    Add-ToHistory -Request $NaturalLanguage -Command $command -Executed $false
+                }
+            }
+            'e' {
+                Write-Host "Edit command: " -NoNewline -ForegroundColor Cyan
+                $editedCommand = Read-Host
+                if ($editedCommand.Trim()) {
+                    Write-AIResponse "Executing edited command..." "info"
+                    try {
+                        Invoke-Expression $editedCommand
+                        Write-AIResponse "Edited command executed successfully" "success"
+                        Add-ToHistory -Request $NaturalLanguage -Command $editedCommand -Executed $true
+                    } catch {
+                        Write-AIResponse "Execution failed: $($_.Exception.Message)" "error"
+                        Add-ToHistory -Request $NaturalLanguage -Command $editedCommand -Executed $false
+                    }
+                }
+            }
+            default {
+                Write-AIResponse "Command cancelled by user" "info"
+                Add-ToHistory -Request $NaturalLanguage -Command $command -Executed $false
+            }
+        }
     }
 }
 
-function Show-AIStatus {
-    Write-AIResponse "NewTerminal-AI Status" "Info"
-    Write-Host
+function Start-NLMode {
+    # Clean startup - minimal output
+    Write-Host "🤖 AI Terminal" -ForegroundColor Green
+    Write-Host "Type commands in natural language. Type 'exit' to quit." -ForegroundColor Gray
+    Write-Host ""
     
-    # Ollama connection
-    $ollamaStatus = Test-OllamaConnection
-    $statusColor = if ($ollamaStatus) { "Success" } else { "Error" }
-    $statusText = if ($ollamaStatus) { "Connected" } else { "Disconnected" }
-    Write-AIResponse "Ollama Status: $statusText" $statusColor
-    
-    # Available models
-    if ($ollamaStatus) {
-        $models = Get-OllamaModels
-        Write-AIResponse "Available Models: $($models -join ', ')" "Info"
-        Write-AIResponse "Current Model: $script:DefaultModel" "Info"
-    }
-    
-    # System info
-    Write-AIResponse "System: $($script:SystemInfo.OS)" "Info"
-    Write-AIResponse "Shell: $($script:SystemInfo.Shell)" "Info"
-    Write-AIResponse "User: $($script:SystemInfo.UserName)@$($script:SystemInfo.ComputerName)" "Info"
-}
-
-# New NewTerminal AI instant activation interface
-function Start-NewTerminalAIMode {
-    Write-AIResponse "NewTerminal AI Mode Activated!" "Success"
-    Write-AIResponse "Type anything - commands execute directly, questions get AI responses!" "Info"
-    Write-AIResponse "Type 'exit-newterminal' to return to normal PowerShell." "Info"
-    Write-Host
+    $sessionCommands = 0
     
     while ($true) {
-        Write-Host "$(Get-Location)> " -NoNewline -ForegroundColor Cyan
+        $context = Get-ContextInfo
+        $prompt = ">"
+        
+        # Clean prompt with minimal context
+        if ($context.GitBranch) {
+            $prompt = "($($context.GitBranch)) >"
+        }
+        
+        Write-Host "$prompt " -NoNewline -ForegroundColor Cyan
         $input = Read-Host
         
-        if ($input -eq "exit-newterminal" -or $input -eq "exit") {
-            Write-AIResponse "Exiting NewTerminal AI Mode" "Info"
-            break
+        switch ($input.ToLower().Trim()) {
+            'exit' {
+                Write-Host "👋 Goodbye!" -ForegroundColor Green
+                break
+            }
+            'history' {
+                Show-CommandHistory -Last 10
+                continue
+            }
+            'clear' {
+                Clear-Host
+                Write-Host "🤖 AI Terminal" -ForegroundColor Green
+                Write-Host "Type commands in natural language. Type 'exit' to quit." -ForegroundColor Gray
+                Write-Host ""
+                continue
+            }
+            'help' {
+                Write-Host "Available commands:" -ForegroundColor Yellow
+                Write-Host "  exit     - Exit AI terminal" -ForegroundColor Cyan
+                Write-Host "  history  - Show command history" -ForegroundColor Cyan
+                Write-Host "  clear    - Clear screen" -ForegroundColor Cyan
+                Write-Host "  help     - Show this help" -ForegroundColor Cyan
+                Write-Host "  Or describe what you want to do!" -ForegroundColor Green
+                continue
+            }
+            default {
+                if ($input.Trim()) {
+                    $sessionCommands++
+                    # Use clean output mode for Warp AI-style experience
+                    Invoke-AICommand -NaturalLanguage $input -AutoExecute -CleanOutput
+                    Write-Host ""
+                }
+            }
         }
-        
-        if ([string]::IsNullOrWhiteSpace($input)) {
-            continue
-        }
-        
-        # Process input with intelligent detection
-        Process-IntelligentInput -UserInput $input
-        
-        Write-Host
     }
 }
 
-function Process-IntelligentInput {
-    param([string]$UserInput)
-    
-    # Enhanced detection logic for different input types
-    $isDirectCommand = Test-DirectCommand $UserInput
-    $isQuestion = Test-QuestionPattern $UserInput
-    $isSystemCommand = Test-SystemCommand $UserInput
-    
-    if ($isDirectCommand) {
-        # Execute as direct PowerShell command
-        try {
-            Invoke-Expression $UserInput
-        }
-        catch {
-            # If direct execution fails, try as natural language
-            Write-AIResponse "Command not found, interpreting as natural language..." "Info"
-            Process-NaturalLanguageInput -UserInput $UserInput -AutoExecute
-        }
-    }
-    elseif ($isQuestion) {
-        # Process as AI question
-        Write-AIResponse "Processing question..." "Info"
-        Ask-AI -Question $UserInput
-    }
-    else {
-        # Default to natural language command generation
-        Process-NaturalLanguageInput -UserInput $UserInput -AutoExecute
-    }
+# Create wrapper function for auto-execution with clean output
+function Invoke-AICommandAuto {
+    param([string]$NaturalLanguage)
+    Invoke-AICommand -NaturalLanguage $NaturalLanguage -AutoExecute -CleanOutput
 }
 
-function Test-DirectCommand {
-    param([string]$Input)
-    
-    # List of common PowerShell commands that should be executed directly
-    $directCommands = @(
-        'Get-*', 'Set-*', 'New-*', 'Remove-*', 'Test-*', 'Start-*', 'Stop-*',
-        'ls', 'dir', 'cd', 'pwd', 'cat', 'type', 'echo', 'cls', 'clear',
-        'help', 'man', 'where', 'which', 'whoami', 'hostname', 'ipconfig',
-        'ping', 'tracert', 'nslookup', 'netstat', 'tasklist', 'taskkill',
-        'sc', 'service', 'reg', 'regedit', 'msconfig', 'control',
-        'notepad', 'calc', 'mspaint', 'explorer'
-    )
-    
-    $firstWord = ($Input -split ' ')[0]
-    
-    # Check if it matches any direct command pattern
-    foreach ($pattern in $directCommands) {
-        if ($firstWord -like $pattern) {
-            return $true
-        }
-    }
-    
-    # Check if it's a valid PowerShell cmdlet
-    try {
-        $command = Get-Command $firstWord -ErrorAction SilentlyContinue
-        if ($command) {
-            return $true
-        }
-    }
-    catch {
-        # Ignore errors
-    }
-    
-    return $false
-}
-
-function Test-QuestionPattern {
-    param([string]$Input)
-    
-    # Enhanced question detection
-    $questionWords = @('what', 'how', 'why', 'when', 'where', 'who', 'which', 'can you', 'could you', 'would you', 'should i', 'do you', 'is it', 'are there', 'explain', 'tell me', 'help me', 'show me')
-    $questionMarkers = @('?', 'help', 'explain')
-    
-    $lowerInput = $Input.ToLower()
-    
-    # Check for question words at the beginning
-    foreach ($word in $questionWords) {
-        if ($lowerInput.StartsWith($word)) {
-            return $true
-        }
-    }
-    
-    # Check for question markers
-    foreach ($marker in $questionMarkers) {
-        if ($lowerInput.Contains($marker)) {
-            return $true
-        }
-    }
-    
-    return $false
-}
-
-function Test-SystemCommand {
-    param([string]$Input)
-    
-    # System command patterns
-    $systemPatterns = @('shutdown', 'restart', 'reboot', 'sleep', 'hibernate', 'lock')
-    $lowerInput = $Input.ToLower()
-    
-    foreach ($pattern in $systemPatterns) {
-        if ($lowerInput.Contains($pattern)) {
-            return $true
-        }
-    }
-    
-    return $false
-}
-
-# Aliases for easier usage
+# Aliases
 Set-Alias -Name "ai" -Value "Invoke-AICommand"
-Set-Alias -Name "ask" -Value "Ask-AI"
-Set-Alias -Name "ai-status" -Value "Show-AIStatus"
-Set-Alias -Name "nl" -Value "Start-NaturalLanguageMode"
-Set-Alias -Name "natural" -Value "Start-NaturalLanguageMode"
-Set-Alias -Name "warp" -Value "Start-NewTerminalAIMode"
-Set-Alias -Name "w" -Value "Start-NewTerminalAIMode"
-Set-Alias -Name "setup" -Value "Start-AutoSetup"
-Set-Alias -Name "install-model" -Value "Install-OptimalModel"
-Set-Alias -Name "optimize" -Value "Optimize-ModelConfiguration"
+Set-Alias -Name "aia" -Value "Invoke-AICommandAuto"
+Set-Alias -Name "nl" -Value "Start-NLMode"
 
-function Start-PerformanceOptimization {
-    <#
-    .SYNOPSIS
-    Optimizes NewTerminal-AI performance for faster local processing
-    
-    .DESCRIPTION
-    Runs comprehensive performance optimizations including PowerShell settings,
-    system resources, network configuration, and Ollama optimization
-    
-    .PARAMETER Aggressive
-    Enable aggressive optimizations that may use more system resources
-    
-    .PARAMETER Quiet
-    Run optimization silently without progress output
-    
-    .EXAMPLE
-    Start-PerformanceOptimization
-    
-    .EXAMPLE
-    optimize-performance -Aggressive
-    #>
-    param(
-        [switch]$Aggressive,
-        [switch]$Quiet
-    )
-    
-    try {
-        $scriptPath = Join-Path $PSScriptRoot "scripts\optimize-performance.ps1"
-        
-        if (Test-Path $scriptPath) {
-            $params = @{}
-            if ($Aggressive) { $params.Aggressive = $true }
-            if ($Quiet) { $params.Quiet = $true }
-            
-            & $scriptPath @params
-        } else {
-            Write-AIResponse "Performance optimization script not found at: $scriptPath" "Error"
-            Write-AIResponse "Please ensure the scripts folder is present in the module directory" "Warning"
-        }
-    } catch {
-        Write-AIResponse "Error running performance optimization: $($_.Exception.Message)" "Error"
-    }
-}
-
-# Aliases for easier usage
-Set-Alias -Name "optimize-performance" -Value "Start-PerformanceOptimization"
-
-# Export functions
+# Export module members
 Export-ModuleMember -Function @(
     'Invoke-AICommand',
-    'Ask-AI', 
-    'Show-AIStatus',
+    'Invoke-AICommandAuto',
+    'Start-NLMode',
     'Test-OllamaConnection',
-    'Get-OllamaModels',
-    'Start-NaturalLanguageMode',
-    'Start-NewTerminalAIMode',
-    'Process-IntelligentInput',
-    'Process-NaturalLanguageInput',
-    'Get-CommandExplanation',
-    'Get-CommandSuggestion',
-    'Test-DirectCommand',
-    'Test-QuestionPattern',
-    'Test-SystemCommand',
-    'Test-SystemRequirements',
-    'Install-OptimalModel',
-    'Optimize-ModelConfiguration',
-    'Start-AutoSetup',
-    'Start-PerformanceOptimization',
-    'Test-CommandSafety',
-    'Write-AIResponse',
-    'Write-ProgressStatus',
-    'Convert-NaturalLanguageToCommand'
-) -Alias @('ai', 'ask', 'ai-status', 'nl', 'natural', 'warp', 'w', 'setup', 'install-model', 'optimize', 'optimize-performance')
+    'Show-CommandHistory',
+    'Clear-CommandHistory',
+    'Get-ContextInfo',
+    'Add-ToHistory',
+    'Show-ThinkingAnimation'
+) -Alias @('ai', 'aia', 'nl')
 
 # Welcome message
-Write-AIResponse "NewTerminal-AI loaded successfully!" "Success"
-Write-AIResponse "NEW: Type 'warp' for instant NewTerminal AI mode!" "Success"
-Write-AIResponse "Use 'setup' for automatic model detection and installation" "Info"
-Write-AIResponse "Use 'ai [your request]' to generate commands" "Info"
-Write-AIResponse "Use 'ask [your question]' for general AI assistance" "Info"
-Write-AIResponse "Use 'ai-status' to check system status" "Info"
-
-# Auto-run setup check on module load
-if (-not (Test-SystemRequirements).OptimalModelPresent) {
-    Write-AIResponse "No optimal AI model detected. Run 'setup' for automatic configuration." "Warning"
-}
+Write-AIResponse "NewTerminal-AI loaded! Use 'ai <request>' for commands or 'nl' for interactive mode." "success"
