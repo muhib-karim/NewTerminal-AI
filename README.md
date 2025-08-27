@@ -2,7 +2,7 @@
 
 Local AI for your terminal. NewTerminal-AI pairs Ollama with Shell Genie so you can type natural language and get the exact shell command back — fully offline after the first model pull.
 
-[![Release](https://img.shields.io/github/v/release/1111MK1111/NewTerminal-AI?label=release)](https://github.com/1111MK1111/NewTerminal-AI/releases) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) ![Platforms](https://img.shields.io/badge/platforms-Linux%20%7C%20macOS%20%7C%20Windows-blue)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) ![Platforms](https://img.shields.io/badge/platforms-Linux%20%7C%20macOS%20%7C%20Windows-blue)
 
 ---
 
@@ -18,22 +18,20 @@ Local AI for your terminal. NewTerminal-AI pairs Ollama with Shell Genie so you 
 - Uses Shell Genie to translate your intent into shell commands
 
 ## 📦 Install
-Download the latest release ZIP and run the cross-platform installer.
+Clone or download this repository and run the cross-platform installer.
 
 ### Linux/macOS
 ```bash
-curl -L https://github.com/1111MK1111/NewTerminal-AI/releases/latest/download/newterminal-v1.0.zip -o newterminal.zip
-unzip newterminal.zip
-cd newterminal-v1.0
+git clone <repository-url>
+cd NewTerminal-AI
 ./install-any.sh
 ```
 
 ### Windows (PowerShell)
 ```powershell
-Invoke-WebRequest https://github.com/1111MK1111/NewTerminal-AI/releases/latest/download/newterminal-v1.0.zip -OutFile newterminal.zip
-Expand-Archive newterminal.zip -DestinationPath .
-cd newterminal-v1.0
-./install-any.sh
+git clone <repository-url>
+cd NewTerminal-AI
+.\install.ps1
 ```
 
 ## 🎯 Usage
