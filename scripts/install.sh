@@ -20,11 +20,11 @@ else
 fi
 echo "Detected RAM: $RAM_GB GB"
 if [ "$RAM_GB" -lt 4 ]; then
-    MODEL="phi-3-mini-4k"
+    MODEL="qwen2.5:0.5b"
 elif [ "$RAM_GB" -lt 8 ]; then
-    MODEL="llama3.2:3b"
+    MODEL="qwen2.5:0.5b"
 else
-    MODEL="mistral:7b"
+    MODEL="qwen2.5:0.5b"
 fi
 echo "Selected AI model: $MODEL"
 

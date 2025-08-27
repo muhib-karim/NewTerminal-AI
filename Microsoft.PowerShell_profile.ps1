@@ -9,62 +9,77 @@ if (Test-Path $ModulePath) {
     Write-Warning "NewTerminal-AI module not found at $ModulePath"
 }
 
-# Enhanced prompt with AI indicator
+# Override the prompt function to intercept all input
 function prompt {
-    $currentPath = $executionContext.SessionState.Path.CurrentLocation
-    $currentDirectory = Split-Path $currentPath -Leaf
+    # Store the original location
+    $currentPath = Get-Location
     
-    # Color codes
-    $green = "`e[32m"
-    $blue = "`e[34m"
-    $cyan = "`e[36m"
-    $yellow = "`e[33m"
-    $reset = "`e[0m"
-    $bold = "`e[1m"
+    # Display custom prompt
+    Write-Host "[AI] " -NoNewline -ForegroundColor Cyan
+    Write-Host "$($currentPath.Path.Replace($HOME, '~'))" -NoNewline -ForegroundColor Green
+    Write-Host " > " -NoNewline -ForegroundColor White
     
-    # Check if we're in a git repository
-    $gitBranch = ""
-    if (Get-Command git -ErrorAction SilentlyContinue) {
-        try {
-            $branch = git branch --show-current 2>$null
-            if ($branch) {
-                $gitBranch = " $yellow($branch)$reset"
-            }
-        } catch {}
-    }
-    
-    # AI status indicator
-    $aiStatus = ""
-    try {
-        if (Get-Command Test-OllamaConnection -ErrorAction SilentlyContinue) {
-            if (Test-OllamaConnection) {
-                $aiStatus = " $green🤖$reset"
-            } else {
-                $aiStatus = " $yellow🤖$reset"
-            }
-        }
-    } catch {}
-    
-    # Build prompt
-    $promptText = "$cyan$bold(NewTerminal-AI)$reset $blue$currentDirectory$reset$gitBranch$aiStatus`n$green❯$reset "
-    
-    return $promptText
+    # Return empty string to prevent default prompt
+    return ""
 }
 
-# Welcome message
-Write-Host ""
-Write-Host "🚀 " -NoNewline -ForegroundColor Green
-Write-Host "NewTerminal-AI is ready!" -ForegroundColor Cyan
-Write-Host "   Use " -NoNewline -ForegroundColor Gray
-Write-Host "ai 'your request'" -NoNewline -ForegroundColor Yellow
-Write-Host " to generate and execute commands" -ForegroundColor Gray
-Write-Host "   Use " -NoNewline -ForegroundColor Gray
-Write-Host "ask 'your question'" -NoNewline -ForegroundColor Yellow
-Write-Host " for general AI assistance" -ForegroundColor Gray
-Write-Host "   Use " -NoNewline -ForegroundColor Gray
-Write-Host "ai-status" -NoNewline -ForegroundColor Yellow
-Write-Host " to check system status" -ForegroundColor Gray
-Write-Host ""
+# Warp AI-style terminal that seamlessly converts natural language to commands
+function Start-WarpAITerminal {
+    Write-Host "🚀 " -NoNewline -ForegroundColor Green
+    Write-Host "Warp AI Terminal Mode" -ForegroundColor Cyan
+    Write-Host "   Natural language → Shell commands (just like Warp AI)" -ForegroundColor Gray
+    Write-Host "   Type 'exit' to quit" -ForegroundColor Gray
+    Write-Host ""
+    
+    while ($true) {
+        # Warp-style prompt
+        $currentDir = (Get-Location | Split-Path -Leaf)
+        Write-Host "$currentDir" -NoNewline -ForegroundColor Blue
+        Write-Host " ❯ " -NoNewline -ForegroundColor Green
+        
+        # Read user input
+        $input = Read-Host
+        
+        # Check for exit command
+        if ($input -eq "exit" -or $input -eq "quit") {
+            Write-Host "Goodbye! 👋" -ForegroundColor Cyan
+            break
+        }
+        
+        # Skip empty input
+        if ([string]::IsNullOrWhiteSpace($input)) {
+            continue
+        }
+        
+        # Process input Warp AI style
+        try {
+            # Check if it's already a valid command
+            $isDirectCommand = Test-DirectCommand $input
+            
+            if ($isDirectCommand) {
+                # Execute directly without AI processing
+                try {
+                    Invoke-Expression $input
+                }
+                catch {
+                    Write-Host "Command failed: $($_.Exception.Message)" -ForegroundColor Red
+                }
+            }
+            else {
+                # Convert natural language to command and execute immediately
+                Convert-NaturalLanguageToCommand -UserInput $input
+            }
+        }
+        catch {
+            Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
+        }
+        
+        Write-Host ""
+    }
+}
+
+# Auto-start Warp AI-style terminal mode
+Start-WarpAITerminal
 
 # Quick examples function
 function Show-AIExamples {

@@ -25,9 +25,9 @@ try {
     Write-Host "Could not detect RAM. Defaulting to 4GB assumption." -ForegroundColor Yellow
     $RAM_GB = 4
 }
-if ($RAM_GB -lt 4) { $MODEL = "phi-3-mini-4k" }
-elseif ($RAM_GB -lt 8) { $MODEL = "llama3.2:3b" }
-else { $MODEL = "mistral:7b" }
+if ($RAM_GB -lt 4) { $MODEL = "qwen2.5:0.5b" }
+elseif ($RAM_GB -lt 8) { $MODEL = "qwen2.5:0.5b" }
+else { $MODEL = "qwen2.5:0.5b" }
 Write-Host "Selected AI model: $MODEL" -ForegroundColor Cyan
 
 # Enhanced AI Model Detection and Selection
