@@ -35,28 +35,28 @@
 #### Windows (PowerShell 5.0+ or PowerShell Core)
 ```powershell
 # Option 1: Administrator installation (recommended)
-irm https://raw.githubusercontent.com/1111MK1111/NewTerminal-AI/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/ai-dev-2024/NewTerminal-AI/main/install.ps1 | iex
 
 # Option 2: User-only installation
-irm https://raw.githubusercontent.com/1111MK1111/NewTerminal-AI/main/install.ps1 | iex -ArgumentList "-Force"
+irm https://raw.githubusercontent.com/ai-dev-2024/NewTerminal-AI/main/install.ps1 | iex -ArgumentList "-Force"
 ```
 
 #### macOS (Homebrew + PowerShell Core)
 ```bash
 # Automatic installation with Homebrew and PowerShell Core
-curl -fsSL https://raw.githubusercontent.com/1111MK1111/NewTerminal-AI/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ai-dev-2024/NewTerminal-AI/main/install.sh | bash
 ```
 
 #### Linux (Package Manager + PowerShell Core)
 ```bash
 # Ubuntu/Debian
-curl -fsSL https://raw.githubusercontent.com/1111MK1111/NewTerminal-AI/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ai-dev-2024/NewTerminal-AI/main/install.sh | bash
 
 # CentOS/RHEL/Fedora
-curl -fsSL https://raw.githubusercontent.com/1111MK1111/NewTerminal-AI/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ai-dev-2024/NewTerminal-AI/main/install.sh | bash
 
 # Arch Linux
-curl -fsSL https://raw.githubusercontent.com/1111MK1111/NewTerminal-AI/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ai-dev-2024/NewTerminal-AI/main/install.sh | bash
 ```
 
 ### Manual Installation
@@ -399,7 +399,7 @@ ollama run llama3.2:3b "Hello, test message"
 ```powershell
 # Run as Administrator (recommended)
 Start-Process powershell -Verb RunAs
-irm https://raw.githubusercontent.com/1111MK1111/NewTerminal-AI/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/ai-dev-2024/NewTerminal-AI/main/install.ps1 | iex
 
 # Or force user installation
 .\install.ps1 -Force
@@ -457,15 +457,15 @@ sudo apt install powershell
 
 ## 📦 GitHub Repository
 
-**Repository**: [https://github.com/1111MK1111/NewTerminal-AI](https://github.com/1111MK1111/NewTerminal-AI)
+**Repository**: [https://github.com/ai-dev-2024/NewTerminal-AI](https://github.com/ai-dev-2024/NewTerminal-AI)
 
 ### Quick Links
-- 🏠 **Home**: [Repository Main Page](https://github.com/1111MK1111/NewTerminal-AI)
-- 📋 **Issues**: [Bug Reports & Feature Requests](https://github.com/1111MK1111/NewTerminal-AI/issues)
-- 💬 **Discussions**: [Community Discussions](https://github.com/1111MK1111/NewTerminal-AI/discussions)
-- 📚 **Wiki**: [Documentation & Guides](https://github.com/1111MK1111/NewTerminal-AI/wiki)
-- 🏷️ **Releases**: [Download Latest Version](https://github.com/1111MK1111/NewTerminal-AI/releases)
-- ⭐ **Star**: [Give us a star if you like the project!](https://github.com/1111MK1111/NewTerminal-AI/stargazers)
+- 🏠 **Home**: [Repository Main Page](https://github.com/ai-dev-2024/NewTerminal-AI)
+- 📋 **Issues**: [Bug Reports & Feature Requests](https://github.com/ai-dev-2024/NewTerminal-AI/issues)
+- 💬 **Discussions**: [Community Discussions](https://github.com/ai-dev-2024/NewTerminal-AI/discussions)
+- 📚 **Wiki**: [Documentation & Guides](https://github.com/ai-dev-2024/NewTerminal-AI/wiki)
+- 🏷️ **Releases**: [Download Latest Version](https://github.com/ai-dev-2024/NewTerminal-AI/releases)
+- ⭐ **Star**: [Give us a star if you like the project!](https://github.com/ai-dev-2024/NewTerminal-AI/stargazers)
 
 ### Repository Structure
 ```
@@ -487,8 +487,8 @@ NewTerminal-AI/
 
 We welcome contributions! Here's how you can help:
 
-- 🐛 **Report Bugs**: [Create an issue](https://github.com/1111MK1111/NewTerminal-AI/issues)
-- 💡 **Suggest Features**: [Start a discussion](https://github.com/1111MK1111/NewTerminal-AI/discussions)
+- 🐛 **Report Bugs**: [Create an issue](https://github.com/ai-dev-2024/NewTerminal-AI/issues)
+- 💡 **Suggest Features**: [Start a discussion](https://github.com/ai-dev-2024/NewTerminal-AI/discussions)
 - 🔧 **Submit PRs**: See our [Contributing Guide](CONTRIBUTING.md)
 - 📖 **Improve Docs**: Help make our documentation better
 
