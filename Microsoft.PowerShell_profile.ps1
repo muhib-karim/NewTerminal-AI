@@ -1,10 +1,13 @@
-# NewTerminal-AI PowerShell Profile
+﻿# NewTerminal-AI PowerShell Profile
 # Enhanced AI-powered terminal experience
 
 # Import the NewTerminal-AI module
 $ModulePath = Join-Path $PSScriptRoot "NewTerminal-AI.psm1"
 if (Test-Path $ModulePath) {
+    # This profile runs its own Warp-style loop below, so skip the module's built-in auto-start
+    $env:NEWTERMINAL_AI_NO_AUTOSTART = '1'
     Import-Module $ModulePath -Force
+    Remove-Item Env:NEWTERMINAL_AI_NO_AUTOSTART
 } else {
     Write-Warning "NewTerminal-AI module not found at $ModulePath"
 }
@@ -23,6 +26,19 @@ function prompt {
     return ""
 }
 
+# True when the input starts with an existing command/cmdlet/alias, e.g. "git status"
+function Test-DirectCommand {
+    param([string]$UserInput)
+    $firstWord = ($UserInput.Trim() -split '\s+')[0]
+    return [bool](Get-Command $firstWord -ErrorAction SilentlyContinue)
+}
+
+# Generate a command with the NewTerminal-AI module and run it
+function Convert-NaturalLanguageToCommand {
+    param([string]$UserInput)
+    Invoke-AICommand -NaturalLanguage $UserInput -AutoExecute -CleanOutput
+}
+
 # Warp AI-style terminal that seamlessly converts natural language to commands
 function Start-WarpAITerminal {
     Write-Host "🚀 " -NoNewline -ForegroundColor Green
@@ -37,29 +53,29 @@ function Start-WarpAITerminal {
         Write-Host "$currentDir" -NoNewline -ForegroundColor Blue
         Write-Host " ❯ " -NoNewline -ForegroundColor Green
         
-        # Read user input
-        $input = Read-Host
+        # Read user input ($null means end of input)
+        $userInput = Read-Host
         
         # Check for exit command
-        if ($input -eq "exit" -or $input -eq "quit") {
+        if ($null -eq $userInput -or $userInput -eq "exit" -or $userInput -eq "quit") {
             Write-Host "Goodbye! 👋" -ForegroundColor Cyan
             break
         }
         
         # Skip empty input
-        if ([string]::IsNullOrWhiteSpace($input)) {
+        if ([string]::IsNullOrWhiteSpace($userInput)) {
             continue
         }
         
         # Process input Warp AI style
         try {
             # Check if it's already a valid command
-            $isDirectCommand = Test-DirectCommand $input
+            $isDirectCommand = Test-DirectCommand $userInput
             
             if ($isDirectCommand) {
                 # Execute directly without AI processing
                 try {
-                    Invoke-Expression $input
+                    Invoke-Expression $userInput
                 }
                 catch {
                     Write-Host "Command failed: $($_.Exception.Message)" -ForegroundColor Red
@@ -67,7 +83,7 @@ function Start-WarpAITerminal {
             }
             else {
                 # Convert natural language to command and execute immediately
-                Convert-NaturalLanguageToCommand -UserInput $input
+                Convert-NaturalLanguageToCommand -UserInput $userInput
             }
         }
         catch {
@@ -78,24 +94,21 @@ function Start-WarpAITerminal {
     }
 }
 
-# Auto-start Warp AI-style terminal mode
-Start-WarpAITerminal
-
 # Quick examples function
 function Show-AIExamples {
     Write-Host "🎯 Quick Examples:" -ForegroundColor Cyan
     Write-Host "   ai 'list running processes'" -ForegroundColor Yellow
     Write-Host "   ai 'find large files in current directory'" -ForegroundColor Yellow
-    Write-Host "   ai 'show system information' -Execute" -ForegroundColor Yellow
-    Write-Host "   ask 'how to optimize PowerShell performance'" -ForegroundColor Yellow
-    Write-Host "   ai-status" -ForegroundColor Yellow
+    Write-Host "   aia 'show system information'" -ForegroundColor Yellow
+    Write-Host "   nl" -ForegroundColor Yellow
+    Write-Host "   history (inside nl / AI Terminal)" -ForegroundColor Yellow
 }
 
 # Set alias for examples
 Set-Alias -Name "ai-examples" -Value "Show-AIExamples"
 
 # Enhanced tab completion for AI commands
-Register-ArgumentCompleter -CommandName 'Invoke-AICommand' -ParameterName 'Request' -ScriptBlock {
+Register-ArgumentCompleter -CommandName 'Invoke-AICommand' -ParameterName 'NaturalLanguage' -ScriptBlock {
     param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
     
     $suggestions = @(
@@ -136,3 +149,6 @@ $ErrorView = 'DetailedView'
 
 # Module auto-loading
 $PSModuleAutoLoadingPreference = 'All'
+
+# Auto-start Warp AI-style terminal mode (last, so every function above is defined)
+Start-WarpAITerminal

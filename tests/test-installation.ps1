@@ -1,4 +1,4 @@
-# NewTerminal-AI Installation Test Suite
+﻿# NewTerminal-AI Installation Test Suite
 # Comprehensive testing for Windows PowerShell installation
 
 param(
@@ -18,7 +18,8 @@ function Add-TestResult {
         [string]$Details = ""
     )
     
-    $TestResults += [PSCustomObject]@{
+    # $script: scope - a plain += inside a function only updates a local copy
+    $script:TestResults += [PSCustomObject]@{
         Test = $TestName
         Passed = $Passed
         Message = $Message
@@ -136,8 +137,10 @@ function Test-ModelFunctionality {
 # Test 5: Check NewTerminal-AI module
 function Test-NewTerminalAIModule {
     try {
-        $modulePath = Join-Path $PSScriptRoot "..\NewTerminal-AI.psm1"
+        $modulePath = Join-Path (Split-Path $PSScriptRoot -Parent) "NewTerminal-AI.psm1"
         if (Test-Path $modulePath) {
+            # Do not start the interactive loop while testing
+            $env:NEWTERMINAL_AI_NO_AUTOSTART = '1'
             Import-Module $modulePath -Force -ErrorAction Stop
             
             # Check if AI function is available
@@ -164,7 +167,8 @@ function Test-PowerShellProfile {
         $profilePath = $PROFILE.CurrentUserAllHosts
         if (Test-Path $profilePath) {
             $profileContent = Get-Content $profilePath -Raw
-            if ($profileContent -match "NewTerminal-AI") {
+            # install.ps1 / install.sh add "Import-Module AITerminal"; scripts/install-windows.ps1 adds NewTerminal-AI
+            if ($profileContent -match "AITerminal|NewTerminal-AI") {
                 Add-TestResult "PowerShell Profile" $true "Profile configured with NewTerminal-AI"
                 return $true
             } else {
@@ -201,12 +205,22 @@ function Test-AICommandIntegration {
 # Test 8: System requirements check
 function Test-SystemRequirements {
     try {
-        # Check RAM
-        $RAM_GB = [math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1GB)
-        
-        # Check disk space
-        $diskSpace = Get-CimInstance Win32_LogicalDisk | Where-Object { $_.DeviceID -eq "C:" }
-        $freeSpaceGB = [math]::Round($diskSpace.FreeSpace / 1GB)
+        if ($IsLinux -or $IsMacOS) {
+            # Win32 CIM classes only exist on Windows
+            $RAM_GB = if ($IsLinux) {
+                [math]::Round(((Get-Content /proc/meminfo | Select-Object -First 1) -replace '\D', '') / 1MB)
+            } else {
+                [math]::Round([double](sysctl -n hw.memsize) / 1GB)
+            }
+            $freeSpaceGB = [math]::Round((Get-PSDrive -Name '/').Free / 1GB)
+        } else {
+            # Check RAM
+            $RAM_GB = [math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1GB)
+            
+            # Check disk space
+            $diskSpace = Get-CimInstance Win32_LogicalDisk | Where-Object { $_.DeviceID -eq "C:" }
+            $freeSpaceGB = [math]::Round($diskSpace.FreeSpace / 1GB)
+        }
         
         $requirements = @()
         if ($RAM_GB -ge 4) {
@@ -235,27 +249,27 @@ function Run-AllTests {
     Write-Host "Starting comprehensive testing..." -ForegroundColor Yellow
     Write-Host ""
     
-    # Run all tests
-    Test-SystemRequirements
-    Test-OllamaInstallation
-    Test-OllamaService
-    Test-AvailableModels
+    # Run all tests (their boolean return values must not leak into this function's output)
+    $null = Test-SystemRequirements
+    $null = Test-OllamaInstallation
+    $null = Test-OllamaService
+    $null = Test-AvailableModels
     
     if (-not $SkipModelDownload) {
-        Test-ModelFunctionality
+        $null = Test-ModelFunctionality
     } else {
         Add-TestResult "Model Functionality" $true "Skipped (SkipModelDownload flag set)"
     }
     
-    Test-NewTerminalAIModule
-    Test-PowerShellProfile
-    Test-AICommandIntegration
+    $null = Test-NewTerminalAIModule
+    $null = Test-PowerShellProfile
+    $null = Test-AICommandIntegration
     
     # Generate summary
     Write-Host ""
     Write-Host "=== Test Summary ===" -ForegroundColor Cyan
     
-    $passedTests = ($TestResults | Where-Object { $_.Passed }).Count
+    $passedTests = @($TestResults | Where-Object { $_.Passed }).Count
     $totalTests = $TestResults.Count
     $failedTests = $totalTests - $passedTests
     

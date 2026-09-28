@@ -14,6 +14,7 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALL_DIR="$HOME/.newterminal-ai"
 BIN_DIR="$HOME/.local/bin"
 SHELL_RC=""
@@ -122,8 +123,9 @@ install_model() {
     if ollama pull "$target_model"; then
         print_status "Model $target_model installed successfully."
         
-        # Update the model in the script
-        sed -i.bak "s/OLLAMA_MODEL=\".*\"/OLLAMA_MODEL=\"$target_model\"/" "$INSTALL_DIR/NewTerminal-AI.sh"
+        # Update the model in the installed script (install_newterminal_ai must run first)
+        sed -i.bak "s/^OLLAMA_MODEL=\".*\"/OLLAMA_MODEL=\"$target_model\"/" "$INSTALL_DIR/NewTerminal-AI.sh"
+        rm -f "$INSTALL_DIR/NewTerminal-AI.sh.bak"
     else
         print_error "Failed to install model $target_model"
         exit 1
@@ -144,11 +146,13 @@ setup_directories() {
 install_newterminal_ai() {
     print_status "Installing NewTerminal-AI..."
     
-    # Copy the script to installation directory
-    if [[ -f "NewTerminal-AI.sh" ]]; then
+    # Copy the script to installation directory (it lives next to this installer)
+    if [[ -f "$SCRIPT_DIR/NewTerminal-AI.sh" ]]; then
+        cp "$SCRIPT_DIR/NewTerminal-AI.sh" "$INSTALL_DIR/"
+    elif [[ -f "NewTerminal-AI.sh" ]]; then
         cp "NewTerminal-AI.sh" "$INSTALL_DIR/"
     else
-        print_error "NewTerminal-AI.sh not found in current directory"
+        print_error "NewTerminal-AI.sh not found in $SCRIPT_DIR or the current directory"
         exit 1
     fi
     
@@ -233,8 +237,8 @@ main() {
     check_requirements
     setup_directories
     install_ollama
-    install_model
     install_newterminal_ai
+    install_model
     setup_shell_integration
     test_installation
     

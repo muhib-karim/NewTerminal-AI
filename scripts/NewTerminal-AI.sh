@@ -4,7 +4,8 @@
 # Compatible with macOS and Linux
 
 # Configuration
-OLLAMA_MODEL="llama3.2:1b"
+# Override with NEWTERMINAL_AI_MODEL; install-unix.sh rewrites this line to the model it pulled
+OLLAMA_MODEL="${NEWTERMINAL_AI_MODEL:-llama3.2:1b}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HISTORY_FILE="$HOME/.newterminal_ai_history"
 
@@ -69,10 +70,11 @@ Output: find . -name 'test.txt'
 Input: list all files
 Output: ls -la"
     
-    local response=$(ollama run "$OLLAMA_MODEL" "$system_prompt\n\nUser request: $natural_language" 2>/dev/null)
+    local response=$(ollama run "$OLLAMA_MODEL" "$system_prompt"$'\n\n'"User request: $natural_language" 2>/dev/null)
     
-    # Clean up response
-    response=$(echo "$response" | sed 's/^```.*$//' | sed 's/^```$//' | xargs)
+    # Clean up response: drop markdown code fences and blank lines, trim whitespace.
+    # (xargs was used before, but it strips quotes and fails on apostrophes.)
+    response=$(printf '%s\n' "$response" | sed -e '/^[[:space:]]*```/d' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d')
     
     echo "$response"
 }
@@ -81,23 +83,33 @@ Output: ls -la"
 test_command_safety() {
     local command="$1"
     
-    # List of dangerous patterns
+    # Dangerous patterns (POSIX extended regex, matched case-insensitively).
+    # A literal pipe must be written as \| - an unescaped | is alternation.
     local dangerous_patterns=(
-        "rm -rf /"
-        "rm -rf \*"
-        ":(){ :|:& };:"
-        "mkfs"
-        "dd if="
-        ">/dev/"
-        "curl.*|.*sh"
-        "wget.*|.*sh"
+        '(^|[^[:alnum:]_-])rm[[:space:]]+(-[^[:space:]]+[[:space:]]+)*(-[a-z]*r|--recursive)'
+        '(^|[^[:alnum:]_-])rm[[:space:]]+(-[^[:space:]]+[[:space:]]+)*(/|~|\*)([[:space:]]|$)'
+        ':\(\)[[:space:]]*\{.*\};[[:space:]]*:'
+        '(^|[^[:alnum:]_])mkfs'
+        '(^|[^[:alnum:]_])dd[[:space:]].*of=/dev/'
+        '>[[:space:]]*/dev/(sd|hd|nvme|disk|mmcblk)'
+        '(curl|wget)[[:space:]].*\|[[:space:]]*(sudo[[:space:]]+)?(ba|z)?sh([[:space:]]|$)'
+        '(^|[^[:alnum:]_])(shutdown|reboot|halt|poweroff)([^[:alnum:]_]|$)'
+        '(^|[^[:alnum:]_])ch(mod|own|grp)[[:space:]]+(-[^[:space:]]+[[:space:]]+)*-[a-z]*r'
+        'git[[:space:]]+push[[:space:]].*(--force|[[:space:]]-f)([[:space:]]|$)'
+        'git[[:space:]]+reset[[:space:]]+--hard'
+        'git[[:space:]]+clean[[:space:]]+(-[^[:space:]]+[[:space:]]+)*-[a-z]*f'
     )
     
+    local restore_nocasematch
+    restore_nocasematch=$(shopt -p nocasematch)
+    shopt -s nocasematch
     for pattern in "${dangerous_patterns[@]}"; do
         if [[ "$command" =~ $pattern ]]; then
+            $restore_nocasematch
             return 1
         fi
     done
+    $restore_nocasematch
     
     return 0
 }
@@ -109,7 +121,8 @@ add_to_history() {
     local executed="$3"
     local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
     
-    echo "[$timestamp] Request: $request | Command: $command | Executed: $executed" >> "$HISTORY_FILE"
+    # Requests may contain private data: keep the history file readable by the owner only
+    ( umask 077; echo "[$timestamp] Request: $request | Command: $command | Executed: $executed" >> "$HISTORY_FILE" )
 }
 
 # Show command history
@@ -190,7 +203,8 @@ nl() {
         fi
         
         echo -ne "${CYAN}$prompt ${NC}"
-        read -r input
+        # Stop at end of input (Ctrl-D) instead of looping forever
+        read -r input || { echo ""; break; }
         
         case "${input,,}" in
             "exit")
@@ -297,6 +311,10 @@ ai() {
 
 # Main execution
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    # install-unix.sh links ai, aia and nl to this script: dispatch on the name it was called by
+    case "$(basename "$0")" in
+        ai|aia|nl) set -- "$(basename "$0")" "$@" ;;
+    esac
     case "$1" in
         "nl")
             nl

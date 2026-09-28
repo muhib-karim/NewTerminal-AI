@@ -26,8 +26,9 @@ if ! command -v pwsh &> /dev/null; then
     elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
         # Linux
         if command -v apt-get &> /dev/null; then
-            # Ubuntu/Debian
-            wget -q https://packages.microsoft.com/config/ubuntu/20.04/packages-microsoft-prod.deb
+            # Ubuntu/Debian: use the Microsoft repository matching this distribution and release
+            . /etc/os-release
+            wget -q "https://packages.microsoft.com/config/${ID}/${VERSION_ID}/packages-microsoft-prod.deb"
             sudo dpkg -i packages-microsoft-prod.deb
             sudo apt-get update
             sudo apt-get install -y powershell
@@ -97,12 +98,20 @@ mkdir -p "$PROFILE_DIR"
 echo "📦 Installing AI Terminal module..."
 MODULE_DIR="$HOME/.local/share/powershell/Modules/AITerminal"
 mkdir -p "$MODULE_DIR"
-cp "$(dirname "$0")/NewTerminal-AI.psm1" "$MODULE_DIR/AITerminal.psm1"
+# When piped through "curl | bash" there is no local checkout, so download the module instead
+MODULE_SOURCE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd)/NewTerminal-AI.psm1"
+MODULE_URL="https://raw.githubusercontent.com/ai-dev-2024/NewTerminal-AI/main/NewTerminal-AI.psm1"
+if [[ -f "$MODULE_SOURCE" ]]; then
+    cp "$MODULE_SOURCE" "$MODULE_DIR/AITerminal.psm1"
+else
+    curl -fsSL "$MODULE_URL" -o "$MODULE_DIR/AITerminal.psm1"
+fi
 
-# Create PowerShell profile
+# Add auto-load to the PowerShell profile without overwriting existing profile content
 PROFILE_PATH="$PROFILE_DIR/Microsoft.PowerShell_profile.ps1"
-echo "# AI Terminal Auto-Load" > "$PROFILE_PATH"
-echo "Import-Module AITerminal -Force" >> "$PROFILE_PATH"
+if ! grep -qs "Import-Module AITerminal" "$PROFILE_PATH"; then
+    printf '\n# AI Terminal Auto-Load\nImport-Module AITerminal\n' >> "$PROFILE_PATH"
+fi
 
 # Create launcher script
 LAUNCHER_PATH="/usr/local/bin/ai-terminal"
@@ -114,7 +123,7 @@ if ! pgrep -f "ollama serve" > /dev/null; then
     ollama serve &
     sleep 2
 fi
-pwsh -NoExit -Command "Import-Module AITerminal -Force"
+pwsh -NoExit -Command "Import-Module AITerminal"
 EOF
 
 sudo chmod +x "$LAUNCHER_PATH"

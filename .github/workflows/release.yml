@@ -5,6 +5,9 @@ on:
     tags:
       - "v*.*"   # Runs on version tags like v1.0, v1.1, etc.
 
+permissions:
+  contents: write   # needed to create the GitHub release
+
 jobs:
   build-release:
     runs-on: ubuntu-latest
@@ -13,24 +16,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.x"
+      - name: Lint and test
+        shell: pwsh
+        run: ./build.ps1 -Bootstrap
 
       - name: Build release ZIP
         run: |
           mkdir -p newterminal-${GITHUB_REF_NAME}
           cp install.sh newterminal-${GITHUB_REF_NAME}/
           cp install.ps1 newterminal-${GITHUB_REF_NAME}/
-          cp install-any.sh newterminal-${GITHUB_REF_NAME}/
+          cp NewTerminal-AI.psm1 newterminal-${GITHUB_REF_NAME}/
+          cp -r scripts newterminal-${GITHUB_REF_NAME}/
           cp README.md newterminal-${GITHUB_REF_NAME}/
+          cp CHANGELOG.md newterminal-${GITHUB_REF_NAME}/
           cp LICENSE newterminal-${GITHUB_REF_NAME}/
           # Copy media folder if it exists and has content
-          if [ -d "media" ] && [ "$(ls -A media)" ]; then
-            cp -r media newterminal-${GITHUB_REF_NAME}/
-          else
-            mkdir -p newterminal-${GITHUB_REF_NAME}/media
+          if [ -d "assets/media" ] && [ "$(ls -A assets/media)" ]; then
+            cp -r assets/media newterminal-${GITHUB_REF_NAME}/
           fi
           cd newterminal-${GITHUB_REF_NAME}
           zip -r ../newterminal-${GITHUB_REF_NAME}.zip .

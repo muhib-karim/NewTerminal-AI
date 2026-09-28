@@ -113,3 +113,14 @@ models/
 *.user
 .personal
 *.personal
+# Build and test outputs
+testResults.xml
+coverage.xml
+newterminal-v*/
+*.zip
+target/
+.venv/
+*.apk
+
+# Keep Pester test files even where "*.test.*" matches case-insensitively
+!tests/*.Tests.ps1

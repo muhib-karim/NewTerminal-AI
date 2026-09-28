@@ -1,4 +1,4 @@
-# GitHub Integration Script for NewTerminal-AI
+﻿# GitHub Integration Script for NewTerminal-AI
 # Automatically updates repository information, tracks statistics, and maintains version data
 
 param(

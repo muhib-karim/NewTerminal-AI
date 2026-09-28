@@ -5,7 +5,7 @@ param(
     [switch]$Force
 )
 
-Write-Host "🤖 AI Terminal - Windows Installation" -ForegroundColor Green
+Write-Host "AI Terminal - Windows Installation" -ForegroundColor Green
 Write-Host "===================================" -ForegroundColor Green
 Write-Host ""
 
@@ -13,7 +13,7 @@ Write-Host ""
 $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
 if (-not $isAdmin -and -not $Force) {
-    Write-Host "⚠️  For best experience, run as Administrator to install system-wide." -ForegroundColor Yellow
+    Write-Host "[WARN] For best experience, run as Administrator to install system-wide." -ForegroundColor Yellow
     Write-Host "   Use -Force to install for current user only." -ForegroundColor Gray
     Write-Host ""
     $choice = Read-Host "Continue with user installation? [y/N]"
@@ -25,7 +25,7 @@ if (-not $isAdmin -and -not $Force) {
 
 # Check PowerShell version
 if ($PSVersionTable.PSVersion.Major -lt 5) {
-    Write-Host "❌ PowerShell 5.0 or higher is required." -ForegroundColor Red
+    Write-Host "[ERROR] PowerShell 5.0 or higher is required." -ForegroundColor Red
     Write-Host "   Please update PowerShell: https://aka.ms/powershell" -ForegroundColor Yellow
     exit 1
 }
@@ -33,8 +33,8 @@ if ($PSVersionTable.PSVersion.Major -lt 5) {
 # Check if Ollama is installed
 $ollamaPath = Get-Command ollama -ErrorAction SilentlyContinue
 if (-not $ollamaPath) {
-    Write-Host "❌ Ollama is required but not installed." -ForegroundColor Red
-    Write-Host "📦 Installing Ollama..." -ForegroundColor Yellow
+    Write-Host "[ERROR] Ollama is required but not installed." -ForegroundColor Red
+    Write-Host "[*] Installing Ollama..." -ForegroundColor Yellow
     
     # Check if winget is available
     $wingetPath = Get-Command winget -ErrorAction SilentlyContinue
@@ -42,12 +42,12 @@ if (-not $ollamaPath) {
         try {
             winget install Ollama.Ollama
         } catch {
-            Write-Host "❌ Failed to install via winget. Please install manually:" -ForegroundColor Red
+            Write-Host "[ERROR] Failed to install via winget. Please install manually:" -ForegroundColor Red
             Write-Host "   https://ollama.ai/download/windows" -ForegroundColor Yellow
             exit 1
         }
     } else {
-        Write-Host "❌ Please install Ollama manually from: https://ollama.ai/download/windows" -ForegroundColor Red
+        Write-Host "[ERROR] Please install Ollama manually from: https://ollama.ai/download/windows" -ForegroundColor Red
         Write-Host "   Then run this script again." -ForegroundColor Yellow
         exit 1
     }
@@ -57,7 +57,7 @@ if (-not $ollamaPath) {
 }
 
 # Start Ollama service
-Write-Host "🚀 Starting Ollama service..." -ForegroundColor Cyan
+Write-Host "[*] Starting Ollama service..." -ForegroundColor Cyan
 try {
     $ollamaProcess = Get-Process ollama -ErrorAction SilentlyContinue
     if (-not $ollamaProcess) {
@@ -65,43 +65,49 @@ try {
         Start-Sleep -Seconds 3
     }
 } catch {
-    Write-Host "⚠️  Could not start Ollama service automatically." -ForegroundColor Yellow
+    Write-Host "[WARN] Could not start Ollama service automatically." -ForegroundColor Yellow
     Write-Host "   Please start Ollama manually before using AI Terminal." -ForegroundColor Gray
 }
 
 # Pull required model
-Write-Host "📥 Downloading AI model (llama3.2:3b)..." -ForegroundColor Cyan
+Write-Host "[*] Downloading AI model (llama3.2:3b)..." -ForegroundColor Cyan
 try {
     & ollama pull llama3.2:3b
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to pull model"
     }
 } catch {
-    Write-Host "❌ Failed to download AI model. Please run 'ollama pull llama3.2:3b' manually." -ForegroundColor Red
+    Write-Host "[ERROR] Failed to download AI model. Please run 'ollama pull llama3.2:3b' manually." -ForegroundColor Red
 }
 
-# Determine installation path
+# Determine installation path (PowerShell 7 does not search the Windows PowerShell user module folder)
+$psFolder = if ($PSVersionTable.PSEdition -eq 'Core') { 'PowerShell' } else { 'WindowsPowerShell' }
 if ($isAdmin -and -not $Force) {
-    $modulePath = "$env:ProgramFiles\WindowsPowerShell\Modules\AITerminal"
+    $modulePath = "$env:ProgramFiles\$psFolder\Modules\AITerminal"
     $scope = "AllUsers"
 } else {
-    $modulePath = "$env:USERPROFILE\Documents\WindowsPowerShell\Modules\AITerminal"
+    $modulePath = Join-Path ([Environment]::GetFolderPath('MyDocuments')) "$psFolder\Modules\AITerminal"
     $scope = "CurrentUser"
 }
 
 # Create module directory
-Write-Host "📦 Installing AI Terminal module to $scope..." -ForegroundColor Cyan
+Write-Host "[*] Installing AI Terminal module to $scope..." -ForegroundColor Cyan
 if (-not (Test-Path $modulePath)) {
     New-Item -ItemType Directory -Path $modulePath -Force | Out-Null
 }
 
-# Copy module file
-$sourceModule = Join-Path $PSScriptRoot "NewTerminal-AI.psm1"
-if (Test-Path $sourceModule) {
+# Copy module file. When run via "irm | iex" $PSScriptRoot is empty, so download the module instead.
+$moduleUrl = "https://raw.githubusercontent.com/ai-dev-2024/NewTerminal-AI/main/NewTerminal-AI.psm1"
+$sourceModule = if ($PSScriptRoot) { Join-Path $PSScriptRoot "NewTerminal-AI.psm1" } else { $null }
+if ($sourceModule -and (Test-Path $sourceModule)) {
     Copy-Item $sourceModule -Destination (Join-Path $modulePath "AITerminal.psm1") -Force
 } else {
-    Write-Host "❌ Source module not found: $sourceModule" -ForegroundColor Red
-    exit 1
+    try {
+        Invoke-WebRequest -Uri $moduleUrl -OutFile (Join-Path $modulePath "AITerminal.psm1") -UseBasicParsing
+    } catch {
+        Write-Host "[ERROR] Could not find or download the module ($moduleUrl): $($_.Exception.Message)" -ForegroundColor Red
+        exit 1
+    }
 }
 
 # Create module manifest
@@ -114,7 +120,7 @@ $manifestContent = @"
     Author = 'AI Terminal Team'
     Description = 'Natural Language AI Terminal - Convert plain English to CLI commands'
     PowerShellVersion = '5.0'
-    FunctionsToExport = @('Start-AITerminal', 'Invoke-AICommand')
+    FunctionsToExport = @('Invoke-AICommand', 'Invoke-AICommandAuto', 'Start-NLMode', 'Start-AITerminal', 'Test-OllamaConnection', 'Show-CommandHistory', 'Clear-CommandHistory', 'Get-ContextInfo', 'Add-ToHistory', 'Show-ThinkingAnimation')
     AliasesToExport = @('ai', 'aia', 'nl')
 }
 "@
@@ -133,7 +139,7 @@ if (-not (Test-Path $profileDir)) {
 }
 
 # Add auto-import to profile
-$importLine = "Import-Module AITerminal -Force"
+$importLine = "Import-Module AITerminal"
 if (Test-Path $profilePath) {
     $profileContent = Get-Content $profilePath -Raw
     if ($profileContent -notmatch [regex]::Escape($importLine)) {
@@ -151,21 +157,21 @@ if ($isAdmin -or $Force) {
     $shell = New-Object -ComObject WScript.Shell
     $shortcut = $shell.CreateShortcut($shortcutPath)
     $shortcut.TargetPath = "powershell.exe"
-    $shortcut.Arguments = "-NoExit -Command `"Import-Module AITerminal -Force`""
+    $shortcut.Arguments = "-NoExit -Command `"Import-Module AITerminal`""
     $shortcut.Description = "AI Terminal - Natural Language Interface"
     $shortcut.IconLocation = "powershell.exe,0"
     $shortcut.Save()
 }
 
 Write-Host ""
-Write-Host "✅ Installation complete!" -ForegroundColor Green
+Write-Host "[OK] Installation complete!" -ForegroundColor Green
 Write-Host ""
-Write-Host "🚀 Usage:" -ForegroundColor Yellow
-Write-Host "   • Open a new PowerShell window (AI Terminal will auto-start)" -ForegroundColor Cyan
-Write-Host "   • Or use the desktop shortcut 'AI Terminal'" -ForegroundColor Cyan
-Write-Host "   • Or run: Import-Module AITerminal" -ForegroundColor Cyan
+Write-Host "[*] Usage:" -ForegroundColor Yellow
+Write-Host "   - Open a new PowerShell window (AI Terminal will auto-start)" -ForegroundColor Cyan
+Write-Host "   - Or use the desktop shortcut 'AI Terminal'" -ForegroundColor Cyan
+Write-Host "   - Or run: Import-Module AITerminal" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "💡 The AI Terminal starts automatically in natural language mode." -ForegroundColor Green
+Write-Host "The AI Terminal starts automatically in natural language mode." -ForegroundColor Green
 Write-Host "   Just describe what you want to do in plain English!" -ForegroundColor Green
 Write-Host ""
 Write-Host "Examples:" -ForegroundColor Yellow
