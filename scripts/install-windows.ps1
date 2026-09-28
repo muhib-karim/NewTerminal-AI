@@ -1,4 +1,4 @@
-# NewTerminal-AI Windows Installation Script
+﻿# NewTerminal-AI Windows Installation Script
 # Installs Ollama, AI model, and NewTerminal-AI module
 
 param(
@@ -119,6 +119,7 @@ function Install-Model {
         $selectedModel = $Model
     }
     
+    $script:SelectedModel = $selectedModel
     Write-ColorOutput "System RAM: ${ramGB}GB - Installing model: $selectedModel" -Color "Cyan"
     
     try {
@@ -148,22 +149,21 @@ function Install-NewTerminalAI {
     Write-ColorOutput "Installing NewTerminal-AI module..." -Color "Yellow"
     
     try {
-        # Copy the module file
-        $moduleSource = Join-Path $PSScriptRoot "..\NewTerminal-AI-fixed.psm1"
+        # Copy the module file: repository layout (scripts/..), release layout (same folder), then current directory
         $moduleDestination = "$InstallPath\NewTerminal-AI.psm1"
+        $candidates = @(
+            (Join-Path $PSScriptRoot "..\NewTerminal-AI.psm1"),
+            (Join-Path $PSScriptRoot "NewTerminal-AI.psm1"),
+            (Join-Path $PSScriptRoot "NewTerminal-AI-fixed.psm1"),
+            "NewTerminal-AI.psm1"
+        )
+        $moduleSource = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
         
-        if (Test-Path $moduleSource) {
+        if ($moduleSource) {
             Copy-Item $moduleSource $moduleDestination -Force
             Write-ColorOutput "[OK] Module copied to $moduleDestination" -Color "Green"
         } else {
-            # Try current directory
-            $moduleSource = "NewTerminal-AI-fixed.psm1"
-            if (Test-Path $moduleSource) {
-                Copy-Item $moduleSource $moduleDestination -Force
-                Write-ColorOutput "[OK] Module copied to $moduleDestination" -Color "Green"
-            } else {
-                throw "NewTerminal-AI-fixed.psm1 not found"
-            }
+            throw "NewTerminal-AI.psm1 not found"
         }
     } catch {
         Write-Error "Failed to install NewTerminal-AI module: $($_.Exception.Message)"
@@ -184,10 +184,14 @@ function Set-PowerShellIntegration {
         
         # Check if NewTerminal-AI is already in profile
         $profileContent = Get-Content $PROFILE -Raw -ErrorAction SilentlyContinue
-        $importLine = "Import-Module `"$InstallPath\NewTerminal-AI.psm1`" -Force"
+        $importLine = "Import-Module `"$InstallPath\NewTerminal-AI.psm1`""
         
         if ($profileContent -notlike "*NewTerminal-AI*") {
             Add-Content $PROFILE "`n# NewTerminal-AI Integration"
+            if ($script:SelectedModel) {
+                # Use the model this installer pulled instead of the module default
+                Add-Content $PROFILE "`$env:NEWTERMINAL_AI_MODEL = '$($script:SelectedModel)'"
+            }
             Add-Content $PROFILE $importLine
             Add-Content $PROFILE "Write-Host 'NewTerminal-AI loaded! Use `'ai <request>`' for commands or `'nl`' for interactive mode.' -ForegroundColor Green"
             
@@ -196,8 +200,10 @@ function Set-PowerShellIntegration {
             Write-ColorOutput "[OK] NewTerminal-AI already configured in profile" -Color "Cyan"
         }
         
-        # Load the module in current session
+        # Load the module in current session without starting the interactive loop
+        $env:NEWTERMINAL_AI_NO_AUTOSTART = '1'
         Import-Module "$InstallPath\NewTerminal-AI.psm1" -Force
+        Remove-Item Env:NEWTERMINAL_AI_NO_AUTOSTART
         Write-ColorOutput "[OK] NewTerminal-AI loaded in current session" -Color "Green"
         
     } catch {

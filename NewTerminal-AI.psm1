@@ -1,14 +1,16 @@
-# NewTerminal-AI - Enhanced PowerShell Module with Natural Language Interface
+﻿# NewTerminal-AI - Enhanced PowerShell Module with Natural Language Interface
 # Version: 2.0 (Fixed)
 # Author: AI Assistant
 # Description: Provides natural language to PowerShell command conversion using local Ollama AI
 
-# Global variables
-$script:OllamaBaseUrl = "http://localhost:11434"
-$script:OllamaModel = "llama3.2:1b"
+# Global variables (override with NEWTERMINAL_AI_OLLAMA_URL / NEWTERMINAL_AI_MODEL)
+$script:OllamaBaseUrl = if ($env:NEWTERMINAL_AI_OLLAMA_URL) { $env:NEWTERMINAL_AI_OLLAMA_URL.TrimEnd('/') } else { "http://localhost:11434" }
+# Default must match the model pulled by install.ps1 / install.sh
+$script:OllamaModel = if ($env:NEWTERMINAL_AI_MODEL) { $env:NEWTERMINAL_AI_MODEL } else { "llama3.2:3b" }
 $script:UserHistory = @()
 $script:SystemInfo = @{
-    OS = [System.Environment]::OSVersion.Platform
+    # $IsLinux / $IsMacOS do not exist on Windows PowerShell 5.1, where they evaluate to $null
+    OS = if ($IsLinux) { "Linux" } elseif ($IsMacOS) { "macOS" } else { "Windows" }
     UserName = [System.Environment]::UserName
     MachineName = [System.Environment]::MachineName
     PowerShellVersion = $PSVersionTable.PSVersion.ToString()
@@ -73,10 +75,15 @@ function Invoke-OllamaAPI {
     } | ConvertTo-Json -Depth 3
     
     try {
-        $response = Invoke-RestMethod -Uri "$script:OllamaBaseUrl/api/generate" -Method Post -Body $body -ContentType "application/json" -TimeoutSec 30
+        # The first request after startup loads the model into memory, which can take well over 30s on CPU
+        $response = Invoke-RestMethod -Uri "$script:OllamaBaseUrl/api/generate" -Method Post -Body $body -ContentType "application/json" -TimeoutSec 120
         return $response.response
     }
     catch {
+        $details = "$($_.ErrorDetails.Message) $($_.Exception.Message)"
+        if ($details -match 'not found') {
+            throw "Ollama model '$Model' is not installed. Run 'ollama pull $Model' or set NEWTERMINAL_AI_MODEL to an installed model."
+        }
         throw "Ollama API call failed: $($_.Exception.Message)"
     }
 }
@@ -123,10 +130,10 @@ function Get-ContextInfo {
     elseif (Test-Path "package.json") {
         $pathType = "Node.js Project"
     }
-    elseif (Test-Path "*.sln" -or Test-Path "*.csproj") {
+    elseif ((Test-Path "*.sln") -or (Test-Path "*.csproj")) {
         $pathType = ".NET Project"
     }
-    elseif (Test-Path "requirements.txt" -or Test-Path "*.py") {
+    elseif ((Test-Path "requirements.txt") -or (Test-Path "*.py")) {
         $pathType = "Python Project"
     }
     
@@ -136,6 +143,23 @@ function Get-ContextInfo {
         GitBranch = $gitBranch
         GitStatus = $gitStatus
     }
+}
+
+function ConvertTo-CleanCommand {
+    param([string]$Text)
+
+    if (-not $Text) { return "" }
+
+    # Models sometimes wrap the command in a markdown code fence despite the instructions
+    $lines = $Text -split "`r?`n" | Where-Object { $_ -notmatch '^\s*```' }
+    $command = ($lines -join "`n").Trim()
+
+    # Unwrap a command wrapped in single inline backticks, e.g. `Get-Date`
+    if ($command -match '^`([^`]+)`$') {
+        $command = $Matches[1].Trim()
+    }
+
+    return $command
 }
 
 function Get-CommandSuggestion {
@@ -214,7 +238,7 @@ Output: Get-ChildItem
 
     try {
         $response = Invoke-OllamaAPI -Prompt $NaturalLanguage -SystemPrompt $systemPrompt
-        return $response.Trim()
+        return ConvertTo-CleanCommand $response
     }
     catch {
         throw "Failed to generate command: $($_.Exception.Message)"
@@ -224,18 +248,41 @@ Output: Get-ChildItem
 function Test-CommandSafety {
     param([string]$Command)
     
+    # Matched case-insensitively. Generated commands are run through Invoke-Expression,
+    # so anything that can destroy data or the system must be caught here.
     $dangerousPatterns = @(
-        'Remove-Item.*-Recurse.*-Force.*C:\\',
-        'rm\s+-rf\s+/',
-        'del\s+/s\s+/q\s+c:',
-        'format\s+c:',
+        # Recursive or wildcard deletion (PowerShell, POSIX and cmd.exe)
+        'Remove-Item.*-Recurse',
+        '-Recurse.*\|\s*(Remove-Item|ri|rm|del|erase|rd|rmdir)\b',
+        '\brm\s+(-\S+\s+)*(-[a-z]*r|--recursive)',
+        '\brm\s+(-\S+\s+)*(/|~|\*)(\s|$)',
+        '\b(del|erase|rd|rmdir)\s+.*/s\b',
+        # Disk and filesystem destruction
+        '\bformat\s+[a-z]:',
+        '\b(Format-Volume|Clear-Disk|Initialize-Disk|Remove-Partition)\b',
+        '\bmkfs(\.\w+)?\b',
+        '\bdd\s+.*\bof=/dev/',
+        '>\s*/dev/(sd|hd|nvme|disk|mmcblk)',
+        '\bdiskpart\b',
+        # Power state
         'shutdown',
         'restart',
+        '\b(reboot|halt|poweroff)\b',
         'Stop-Computer',
         'Restart-Computer',
+        # System configuration and permissions
         'reg\s+delete.*HKLM',
-        'Remove-Item.*\$env:SystemRoot',
-        'Remove-Item.*\$env:ProgramFiles'
+        'Remove-Item.*\$env:(SystemRoot|windir|ProgramFiles)',
+        '\bch(mod|own|grp)\s+(-\S+\s+)*-[a-z]*R',
+        # Download-and-execute
+        '\b(curl|wget|iwr|irm|Invoke-WebRequest|Invoke-RestMethod)\b.*\|\s*(sudo\s+)?(sh|bash|zsh|iex|Invoke-Expression)\b',
+        '\b(iex|Invoke-Expression)\b.*\b(iwr|irm|Invoke-WebRequest|Invoke-RestMethod|DownloadString)\b',
+        # Fork bomb
+        ':\(\)\s*\{.*\};\s*:',
+        # Destructive git operations
+        '\bgit\s+push\b.*\s(--force|-f)\b',
+        '\bgit\s+reset\s+--hard\b',
+        '\bgit\s+clean\s+(-\S+\s+)*-[a-z]*f'
     )
     
     foreach ($pattern in $dangerousPatterns) {
@@ -278,7 +325,8 @@ function Show-CommandHistory {
         return
     }
     
-    $recentHistory = $script:UserHistory | Select-Object -Last $Last
+    # @() keeps a single entry as an array (a lone hashtable's .Count is its key count)
+    $recentHistory = @($script:UserHistory | Select-Object -Last $Last)
     
     Write-AIResponse "Recent Command History:" "info"
     Write-Host ""
@@ -343,7 +391,18 @@ function Invoke-AICommand {
         Show-ThinkingAnimation -Message "Analyzing your request" -DurationMs 1500
     }
     
-    $command = Get-CommandSuggestion -NaturalLanguage $NaturalLanguage
+    try {
+        $command = Get-CommandSuggestion -NaturalLanguage $NaturalLanguage
+    }
+    catch {
+        if ($CleanOutput) {
+            Write-Host "❌ $($_.Exception.Message)" -ForegroundColor Red
+        } else {
+            Write-AIResponse $_.Exception.Message "error"
+        }
+        Add-ToHistory -Request $NaturalLanguage -Command "" -Executed $false
+        return
+    }
     
     if (-not $command) {
         if ($CleanOutput) {
@@ -356,9 +415,7 @@ function Invoke-AICommand {
         return
     }
     
-    $command = $command.Trim()
-    $command = $command -replace '^```.*$', '' -replace '^```$', ''
-    $command = $command.Trim()
+    $command = ConvertTo-CleanCommand $command
     
     if (-not $CleanOutput) {
         Write-AIResponse "Generated Command:" "command"
@@ -387,6 +444,8 @@ function Invoke-AICommand {
         }
         
         try {
+            # Reset so a failed native command from earlier is not reported for this one
+            $global:LASTEXITCODE = 0
             # Execute command and capture output
             $result = Invoke-Expression $command 2>&1
             
@@ -421,7 +480,7 @@ function Invoke-AICommand {
     } else {
         $confirmation = Read-Host "Execute this command? [y/N/e(dit)]"
         
-        switch ($confirmation.ToLower()) {
+        switch ("$confirmation".Trim().ToLower()) {
             'y' {
                 Write-AIResponse "Executing command..." "info"
                 try {
@@ -436,7 +495,7 @@ function Invoke-AICommand {
             'e' {
                 Write-Host "Edit command: " -NoNewline -ForegroundColor Cyan
                 $editedCommand = Read-Host
-                if ($editedCommand.Trim()) {
+                if ("$editedCommand".Trim()) {
                     Write-AIResponse "Executing edited command..." "info"
                     try {
                         Invoke-Expression $editedCommand
@@ -464,7 +523,7 @@ function Start-NLMode {
     
     $sessionCommands = 0
     
-    while ($true) {
+    :nlLoop while ($true) {
         $context = Get-ContextInfo
         $prompt = ">"
         
@@ -474,12 +533,13 @@ function Start-NLMode {
         }
         
         Write-Host "$prompt " -NoNewline -ForegroundColor Cyan
-        $input = Read-Host
+        $userInput = Read-Host
+        if ($null -eq $userInput) { break nlLoop }
         
-        switch ($input.ToLower().Trim()) {
+        switch ($userInput.ToLower().Trim()) {
             'exit' {
                 Write-Host "👋 Goodbye!" -ForegroundColor Green
-                break
+                break nlLoop
             }
             'history' {
                 Show-CommandHistory -Last 10
@@ -502,10 +562,10 @@ function Start-NLMode {
                 continue
             }
             default {
-                if ($input.Trim()) {
+                if ($userInput.Trim()) {
                     $sessionCommands++
                     # Use clean output mode for Warp AI-style experience
-                    Invoke-AICommand -NaturalLanguage $input -AutoExecute -CleanOutput
+                    Invoke-AICommand -NaturalLanguage $userInput -AutoExecute -CleanOutput
                     Write-Host ""
                 }
             }
@@ -524,19 +584,6 @@ Set-Alias -Name "ai" -Value "Invoke-AICommand"
 Set-Alias -Name "aia" -Value "Invoke-AICommandAuto"
 Set-Alias -Name "nl" -Value "Start-NLMode"
 
-# Export module members
-Export-ModuleMember -Function @(
-    'Invoke-AICommand',
-    'Invoke-AICommandAuto',
-    'Start-NLMode',
-    'Test-OllamaConnection',
-    'Show-CommandHistory',
-    'Clear-CommandHistory',
-    'Get-ContextInfo',
-    'Add-ToHistory',
-    'Show-ThinkingAnimation'
-) -Alias @('ai', 'aia', 'nl')
-
 # Auto-start in natural language mode
 function Start-AITerminal {
     Write-Host "🤖 AI Terminal - Natural Language Interface" -ForegroundColor Green
@@ -545,7 +592,7 @@ function Start-AITerminal {
     
     $sessionCommands = 0
     
-    while ($true) {
+    :aiLoop while ($true) {
         $context = Get-ContextInfo
         $prompt = "AI>"
         
@@ -555,12 +602,13 @@ function Start-AITerminal {
         }
         
         Write-Host "$prompt " -NoNewline -ForegroundColor Cyan
-        $input = Read-Host
+        $userInput = Read-Host
+        if ($null -eq $userInput) { break aiLoop }
         
-        switch ($input.ToLower().Trim()) {
+        switch ($userInput.ToLower().Trim()) {
             'exit' {
                 Write-Host "👋 Goodbye!" -ForegroundColor Green
-                break
+                break aiLoop
             }
             'history' {
                 Show-CommandHistory -Last 10
@@ -583,14 +631,20 @@ function Start-AITerminal {
                 continue
             }
             default {
-                if ($input.Trim()) {
+                if ($userInput.Trim()) {
                     $sessionCommands++
                     # Smart execution with confirmation for dangerous commands
-                    $command = Get-CommandSuggestion -NaturalLanguage $input
+                    try {
+                        $command = Get-CommandSuggestion -NaturalLanguage $userInput
+                    }
+                    catch {
+                        Write-Host "❌ $($_.Exception.Message)" -ForegroundColor Red
+                        Add-ToHistory -Request $userInput -Command "" -Executed $false
+                        Write-Host ""
+                        continue
+                    }
                     
                     if ($command) {
-                        $command = $command.Trim() -replace '^```.*$', '' -replace '^```$', ''
-                        $command = $command.Trim()
                         
                         # Show the command being generated
                         Write-Host "💻 " -NoNewline -ForegroundColor Cyan
@@ -603,34 +657,34 @@ function Start-AITerminal {
                                 if ($result) {
                                     $result | ForEach-Object { Write-Host $_ }
                                 }
-                                Add-ToHistory -Request $input -Command $command -Executed $true
+                                Add-ToHistory -Request $userInput -Command $command -Executed $true
                             } catch {
                                 Write-Host "❌ $($_.Exception.Message)" -ForegroundColor Red
-                                Add-ToHistory -Request $input -Command $command -Executed $false
+                                Add-ToHistory -Request $userInput -Command $command -Executed $false
                             }
                         } else {
                             # Ask for confirmation on potentially dangerous commands
                             Write-Host "⚠️  This command may be potentially harmful. Execute? [y/N]: " -NoNewline -ForegroundColor Yellow
                             $confirm = Read-Host
-                            if ($confirm.ToLower() -eq 'y') {
+                            if ("$confirm".Trim() -eq 'y') {
                                 try {
                                     $result = Invoke-Expression $command 2>&1
                                     if ($result) {
                                         $result | ForEach-Object { Write-Host $_ }
                                     }
-                                    Add-ToHistory -Request $input -Command $command -Executed $true
+                                    Add-ToHistory -Request $userInput -Command $command -Executed $true
                                 } catch {
                                     Write-Host "❌ $($_.Exception.Message)" -ForegroundColor Red
-                                    Add-ToHistory -Request $input -Command $command -Executed $false
+                                    Add-ToHistory -Request $userInput -Command $command -Executed $false
                                 }
                             } else {
                                 Write-Host "Command cancelled" -ForegroundColor Gray
-                                Add-ToHistory -Request $input -Command $command -Executed $false
+                                Add-ToHistory -Request $userInput -Command $command -Executed $false
                             }
                         }
                     } else {
-                        Write-Host "❌ Could not understand: '$input'" -ForegroundColor Red
-                        Add-ToHistory -Request $input -Command "" -Executed $false
+                        Write-Host "❌ Could not understand: '$userInput'" -ForegroundColor Red
+                        Add-ToHistory -Request $userInput -Command "" -Executed $false
                     }
                     Write-Host ""
                 }
@@ -639,7 +693,25 @@ function Start-AITerminal {
     }
 }
 
-# Welcome message and auto-start
-Write-Host "[SUCCESS $(Get-Date -Format 'HH:mm:ss')] AI Terminal loaded! Starting natural language interface..." -ForegroundColor Green
-Start-Sleep -Milliseconds 500
-Start-AITerminal
+# Export module members
+Export-ModuleMember -Function @(
+    'Invoke-AICommand',
+    'Invoke-AICommandAuto',
+    'Start-NLMode',
+    'Start-AITerminal',
+    'Test-OllamaConnection',
+    'Show-CommandHistory',
+    'Clear-CommandHistory',
+    'Get-ContextInfo',
+    'Add-ToHistory',
+    'Show-ThinkingAnimation'
+) -Alias @('ai', 'aia', 'nl')
+
+# Welcome message and auto-start. Skipped when NEWTERMINAL_AI_NO_AUTOSTART is set or the host was
+# started with -NonInteractive, so scripts, installers and tests can import the module without blocking.
+$script:IsNonInteractiveHost = [bool]([Environment]::GetCommandLineArgs() | Where-Object { $_ -match '^-noni' })
+if (-not $env:NEWTERMINAL_AI_NO_AUTOSTART -and -not $script:IsNonInteractiveHost) {
+    Write-Host "[SUCCESS $(Get-Date -Format 'HH:mm:ss')] AI Terminal loaded! Starting natural language interface..." -ForegroundColor Green
+    Start-Sleep -Milliseconds 500
+    Start-AITerminal
+}

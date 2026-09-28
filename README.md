@@ -37,9 +37,12 @@
 # Option 1: Administrator installation (recommended)
 irm https://raw.githubusercontent.com/ai-dev-2024/NewTerminal-AI/main/install.ps1 | iex
 
-# Option 2: User-only installation
-irm https://raw.githubusercontent.com/ai-dev-2024/NewTerminal-AI/main/install.ps1 | iex -ArgumentList "-Force"
+# Option 2: User-only installation (Invoke-Expression cannot pass arguments, so run it as a script block)
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/ai-dev-2024/NewTerminal-AI/main/install.ps1))) -Force
 ```
+
+> The installers are not run in CI or on the Linux test box. They install Ollama and PowerShell, pull
+> a ~2GB model and edit your profile, so the Windows and macOS steps are documented but not verified on Linux.
 
 #### macOS (Homebrew + PowerShell Core)
 ```bash
@@ -68,8 +71,8 @@ curl -fsSL https://raw.githubusercontent.com/ai-dev-2024/NewTerminal-AI/main/ins
 #### Step-by-Step
 ```bash
 # 1. Clone the repository
-git clone https://github.com/yourusername/AI-Terminal.git
-cd AI-Terminal
+git clone https://github.com/ai-dev-2024/NewTerminal-AI.git
+cd NewTerminal-AI
 
 # 2. Run the installation script
 # Windows:
@@ -138,6 +141,9 @@ AI> show my git status
 
 AI> commit all changes with message update docs
 💻 git add . && git commit -m "update docs"
+
+AI> delete the build folder and everything in it
+💻 Remove-Item -Recurse -Force .\build
 ⚠️  This command may be potentially harmful. Execute? [y/N]:
 
 AI> create a new branch called feature-auth
@@ -207,15 +213,21 @@ AI> list running processes
 ## 🎛️ Configuration
 
 ### AI Model Selection
-NewTerminal-AI automatically selects the optimal model based on your system:
-- **16GB+ RAM**: `phi3:mini` (higher accuracy)
-- **8GB+ RAM**: `llama3.2:1b` (balanced performance)
-- **4GB+ RAM**: `llama3.2:1b` (lightweight)
+- The one-line installers (`install.ps1`, `install.sh`) pull `llama3.2:3b`, which is also the PowerShell module's default model.
+- The helper installers in `scripts/` pick a model from your RAM (`phi3:mini` on 16GB+, otherwise `llama3.2:1b`) and configure it:
+  `scripts/install-windows.ps1` sets `NEWTERMINAL_AI_MODEL` in your profile, and `scripts/install-unix.sh` writes it into
+  `~/.newterminal-ai/NewTerminal-AI.sh`.
 
 ### Custom Configuration
-Edit the configuration in your installation directory:
-- **Windows**: `%USERPROFILE%\.newterminal-ai\`
-- **macOS/Linux**: `~/.newterminal-ai/`
+Set these environment variables before the module is imported (for example at the top of your PowerShell profile):
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `NEWTERMINAL_AI_MODEL` | `llama3.2:3b` (bash script: `llama3.2:1b`) | Ollama model used to generate commands |
+| `NEWTERMINAL_AI_OLLAMA_URL` | `http://localhost:11434` | Ollama server address (PowerShell module) |
+| `NEWTERMINAL_AI_NO_AUTOSTART` | unset | Set to any value to import the module without starting the AI Terminal loop |
+
+The AI Terminal loop is also skipped automatically when PowerShell runs with `-NonInteractive`.
 
 ## 🔧 Advanced Usage
 
@@ -230,10 +242,11 @@ clear
 ```
 
 ### Safety Features
-- **Dangerous Command Detection**: Warns before executing potentially harmful commands
-- **Confirmation Prompts**: Interactive mode always asks for confirmation
-- **Command Validation**: Checks command syntax before execution
-- **Rollback Suggestions**: Provides undo commands when possible
+- **Dangerous Command Detection**: Recursive deletes, disk formatting, shutdown/reboot, `curl | sh` style download-and-run,
+  recursive `chmod`/`chown`, fork bombs and history-rewriting git commands (`push --force`, `reset --hard`, `clean -f`) are flagged
+- **Confirmation Prompts**: `ai` always asks before running. `aia`, `nl` and the auto-started AI Terminal run commands
+  that pass the safety check straight away; flagged commands are refused (`ai`, `aia`, `nl`) or need an explicit `y` (AI Terminal)
+- **Best effort only**: the check is a pattern list, not a sandbox, so always read the displayed command
 
 ### Integration with Existing Tools
 NewTerminal-AI works seamlessly with:
@@ -281,12 +294,7 @@ aia "create an example of a bash script with loops"
 We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
 ### Development Setup
-1. Fork the repository
-2. Clone your fork
-3. Install dependencies
-4. Make your changes
-5. Test across platforms
-6. Submit a pull request
+See [Development & Testing](#-development--testing) below.
 
 ## 📄 License
 
@@ -301,7 +309,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 # Check if AI Terminal is working
 ai-terminal  # Should start natural language interface
 
-# Or test the module directly
+# Or test the module directly (skip the auto-started loop, then start nl mode)
+$env:NEWTERMINAL_AI_NO_AUTOSTART = '1'
 Import-Module AITerminal -Force
 nl  # Should start natural language mode
 ```
@@ -322,7 +331,7 @@ Import-Module AITerminal -Force
 
 # Recreate profile if missing
 if (!(Test-Path $PROFILE)) { New-Item -Path $PROFILE -ItemType File -Force }
-Add-Content $PROFILE "Import-Module AITerminal -Force; nl"
+Add-Content $PROFILE "Import-Module AITerminal"
 ```
 
 **macOS/Linux:**
@@ -479,8 +488,9 @@ NewTerminal-AI/
 ├── ⚖️ LICENSE                # MIT License
 ├── 📁 docs/                  # Additional documentation
 ├── 📁 examples/              # Usage examples
+├── 🔨 build.ps1              # Lint + test runner
 ├── 📁 scripts/               # Helper scripts
-└── 📁 tests/                 # Test files
+└── 📁 tests/                 # Pester tests
 ```
 
 ## 🤝 Contributing
@@ -492,16 +502,43 @@ We welcome contributions! Here's how you can help:
 - 🔧 **Submit PRs**: See our [Contributing Guide](CONTRIBUTING.md)
 - 📖 **Improve Docs**: Help make our documentation better
 
-### Development Setup
-```bash
-# Clone and setup
-git clone https://github.com/yourusername/AI-Terminal.git
-cd AI-Terminal
+## 🧪 Development & Testing
 
-# Test your changes
-.\install.ps1 -Force  # Windows
-./install.sh          # macOS/Linux
+Everything below was run on Debian 12 with PowerShell 7.6, Pester 6.2 and PSScriptAnalyzer 1.25.
+The tests need neither Ollama nor a model: a mocked `Invoke-RestMethod`, a local fake Ollama HTTP server
+and a fake `ollama` executable stand in for them.
+
+```bash
+# 1. Install PowerShell 7 (Debian/Ubuntu; see https://aka.ms/powershell for other systems)
+. /etc/os-release
+wget -q "https://packages.microsoft.com/config/${ID}/${VERSION_ID}/packages-microsoft-prod.deb"
+sudo dpkg -i packages-microsoft-prod.deb && rm packages-microsoft-prod.deb
+sudo apt-get update && sudo apt-get install -y powershell
+
+# 2. Clone
+git clone https://github.com/ai-dev-2024/NewTerminal-AI.git
+cd NewTerminal-AI
+
+# 3. Install Pester 5+ and PSScriptAnalyzer (first time only), then lint and test
+pwsh ./build.ps1 -Bootstrap
+
+# Later runs
+pwsh ./build.ps1               # lint + tests
+pwsh ./build.ps1 -Task Lint    # PowerShell parse check, bash -n, PSScriptAnalyzer (errors only)
+pwsh ./build.ps1 -Task Test    # Pester tests only; results are written to testResults.xml
 ```
+
+| Test file | Covers |
+|-----------|--------|
+| `tests/NewTerminal-AI.Tests.ps1` | Module exports, configuration, context detection, command cleanup, safety check, `ai`/`aia`, history, interactive loops, end-to-end run against a fake Ollama server |
+| `tests/Shell.Tests.ps1` | `scripts/NewTerminal-AI.sh`: syntax, safety patterns, response cleanup, `aia` via symlink with a fake `ollama` (skipped on Windows) |
+| `tests/Repository.Tests.ps1` | All scripts parse, Windows PowerShell 5.1 encoding rules, installers pull the module's default model, manifest exports, release workflow paths |
+
+`tests/test-installation.ps1` checks a real installation (Ollama running, model pulled, profile set up):
+`pwsh ./tests/test-installation.ps1 -SkipModelDownload`. It needs Ollama, so it is not part of `build.ps1`.
+
+GitHub Actions runs `./build.ps1 -Bootstrap` on Ubuntu, Windows and macOS (`.github/workflows/ci.yml`);
+only the Ubuntu run has been reproduced locally.
 
 ## 📊 Project Stats
 
@@ -526,6 +563,6 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 **🤖 Transform your terminal experience with natural language AI**
 
-[⭐ Star this repo](https://github.com/yourusername/AI-Terminal) • [🐛 Report Bug](https://github.com/yourusername/AI-Terminal/issues) • [💡 Request Feature](https://github.com/yourusername/AI-Terminal/discussions)
+[⭐ Star this repo](https://github.com/ai-dev-2024/NewTerminal-AI) • [🐛 Report Bug](https://github.com/ai-dev-2024/NewTerminal-AI/issues) • [💡 Request Feature](https://github.com/ai-dev-2024/NewTerminal-AI/discussions)
 
 </div>
