@@ -8,11 +8,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Pester unit test suite (`tests/NewTerminal-AI.Tests.ps1`) and PSScriptAnalyzer lint script (`tools/Invoke-Lint.ps1`)
+- GitHub Actions CI on Ubuntu and Windows
+- `NEWTERMINAL_AI_MODEL` / `NEWTERMINAL_AI_OLLAMA_URL` environment overrides and `NEWTERMINAL_AI_NO_AUTOSTART` to import the module without starting the REPL
 - Cross-platform support for macOS and Linux
 - Professional project structure with organized directories
 - Comprehensive installation scripts for all platforms
 - Educational command display feature
 - Enhanced documentation and examples
+
+### Fixed
+- Typing `exit` now actually leaves the interactive REPL (`break` previously only left the `switch`)
+- `Get-ContextInfo` no longer throws in directories without `.git`/`package.json` (`Test-Path ... -or ...` parsing bug)
+- Markdown code fences in model replies are now stripped from multi-line responses
+- `Start-AITerminal` is now exported (it was referenced by the installer manifest but never exported)
+- `history` now shows output when exactly one entry exists
+- Safety check catches `Remove-Item ... C:\` with `-Recurse`/`-Force` in any order
+- Installers pull `llama3.2:1b`, the model the module actually calls (they previously pulled `llama3.2:3b`)
+- Release workflow no longer copies the missing `install-any.sh` and now ships the module file
 
 ## [2.0.0] - 2025-01-27
 

@@ -70,14 +70,14 @@ try {
 }
 
 # Pull required model
-Write-Host "📥 Downloading AI model (llama3.2:3b)..." -ForegroundColor Cyan
+Write-Host "📥 Downloading AI model (llama3.2:1b)..." -ForegroundColor Cyan
 try {
-    & ollama pull llama3.2:3b
+    & ollama pull llama3.2:1b
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to pull model"
     }
 } catch {
-    Write-Host "❌ Failed to download AI model. Please run 'ollama pull llama3.2:3b' manually." -ForegroundColor Red
+    Write-Host "❌ Failed to download AI model. Please run 'ollama pull llama3.2:1b' manually." -ForegroundColor Red
 }
 
 # Determine installation path

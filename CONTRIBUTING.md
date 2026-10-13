@@ -240,8 +240,8 @@ We're especially looking for contributions in:
 
 If you have questions about contributing:
 
-1. **Check the [Issues](https://github.com/yourusername/NewTerminal-AI/issues)** for existing discussions
-2. **Start a [Discussion](https://github.com/yourusername/NewTerminal-AI/discussions)** for general questions
+1. **Check the [Issues](https://github.com/muhib-karim/NewTerminal-AI/issues)** for existing discussions
+2. **Open an [Issue](https://github.com/muhib-karim/NewTerminal-AI/issues/new)** for general questions
 3. **Join our community** (links coming soon)
 
 ## 🙏 Recognition

@@ -86,8 +86,8 @@ else
 fi
 
 # Pull required model
-echo "📥 Downloading AI model (llama3.2:3b)..."
-ollama pull llama3.2:3b
+echo "📥 Downloading AI model (llama3.2:1b)..."
+ollama pull llama3.2:1b
 
 # Create profile directory
 PROFILE_DIR="$HOME/.config/powershell"

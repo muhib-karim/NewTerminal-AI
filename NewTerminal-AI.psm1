@@ -1,11 +1,11 @@
 # NewTerminal-AI - Enhanced PowerShell Module with Natural Language Interface
-# Version: 2.0 (Fixed)
-# Author: AI Assistant
+# Version: 2.1
 # Description: Provides natural language to PowerShell command conversion using local Ollama AI
 
 # Global variables
-$script:OllamaBaseUrl = "http://localhost:11434"
-$script:OllamaModel = "llama3.2:1b"
+# Both can be overridden via environment variables before importing the module
+$script:OllamaBaseUrl = if ($env:NEWTERMINAL_AI_OLLAMA_URL) { $env:NEWTERMINAL_AI_OLLAMA_URL.TrimEnd('/') } else { "http://localhost:11434" }
+$script:OllamaModel = if ($env:NEWTERMINAL_AI_MODEL) { $env:NEWTERMINAL_AI_MODEL } else { "llama3.2:1b" }
 $script:UserHistory = @()
 $script:SystemInfo = @{
     OS = [System.Environment]::OSVersion.Platform
@@ -45,7 +45,7 @@ function Write-AIResponse {
 
 function Test-OllamaConnection {
     try {
-        $response = Invoke-RestMethod -Uri "$script:OllamaBaseUrl/api/tags" -Method Get -TimeoutSec 5
+        Invoke-RestMethod -Uri "$script:OllamaBaseUrl/api/tags" -Method Get -TimeoutSec 5 | Out-Null
         return $true
     }
     catch {
@@ -123,10 +123,10 @@ function Get-ContextInfo {
     elseif (Test-Path "package.json") {
         $pathType = "Node.js Project"
     }
-    elseif (Test-Path "*.sln" -or Test-Path "*.csproj") {
+    elseif ((Test-Path "*.sln") -or (Test-Path "*.csproj")) {
         $pathType = ".NET Project"
     }
-    elseif (Test-Path "requirements.txt" -or Test-Path "*.py") {
+    elseif ((Test-Path "requirements.txt") -or (Test-Path "*.py")) {
         $pathType = "Python Project"
     }
     
@@ -221,11 +221,21 @@ Output: Get-ChildItem
     }
 }
 
+function ConvertTo-CleanCommand {
+    # Strips Markdown code fences and surrounding whitespace from a model response
+    param([string]$Response)
+
+    if (-not $Response) { return "" }
+
+    $lines = $Response -split "`r?`n" | Where-Object { $_.Trim() -notmatch '^```' }
+    return ($lines -join "`n").Trim()
+}
+
 function Test-CommandSafety {
     param([string]$Command)
     
     $dangerousPatterns = @(
-        'Remove-Item.*-Recurse.*-Force.*C:\\',
+        '^(?=.*Remove-Item)(?=.*-Recurse)(?=.*-Force).*C:\\',
         'rm\s+-rf\s+/',
         'del\s+/s\s+/q\s+c:',
         'format\s+c:',
@@ -278,7 +288,7 @@ function Show-CommandHistory {
         return
     }
     
-    $recentHistory = $script:UserHistory | Select-Object -Last $Last
+    $recentHistory = @($script:UserHistory | Select-Object -Last $Last)
     
     Write-AIResponse "Recent Command History:" "info"
     Write-Host ""
@@ -356,9 +366,7 @@ function Invoke-AICommand {
         return
     }
     
-    $command = $command.Trim()
-    $command = $command -replace '^```.*$', '' -replace '^```$', ''
-    $command = $command.Trim()
+    $command = ConvertTo-CleanCommand -Response $command
     
     if (-not $CleanOutput) {
         Write-AIResponse "Generated Command:" "command"
@@ -462,9 +470,7 @@ function Start-NLMode {
     Write-Host "Type commands in natural language. Type 'exit' to quit." -ForegroundColor Gray
     Write-Host ""
     
-    $sessionCommands = 0
-    
-    while ($true) {
+    :repl while ($true) {
         $context = Get-ContextInfo
         $prompt = ">"
         
@@ -474,12 +480,12 @@ function Start-NLMode {
         }
         
         Write-Host "$prompt " -NoNewline -ForegroundColor Cyan
-        $input = Read-Host
+        $userInput = Read-Host
         
-        switch ($input.ToLower().Trim()) {
+        switch ($userInput.ToLower().Trim()) {
             'exit' {
                 Write-Host "👋 Goodbye!" -ForegroundColor Green
-                break
+                break repl
             }
             'history' {
                 Show-CommandHistory -Last 10
@@ -502,10 +508,9 @@ function Start-NLMode {
                 continue
             }
             default {
-                if ($input.Trim()) {
-                    $sessionCommands++
+                if ($userInput.Trim()) {
                     # Use clean output mode for Warp AI-style experience
-                    Invoke-AICommand -NaturalLanguage $input -AutoExecute -CleanOutput
+                    Invoke-AICommand -NaturalLanguage $userInput -AutoExecute -CleanOutput
                     Write-Host ""
                 }
             }
@@ -524,28 +529,13 @@ Set-Alias -Name "ai" -Value "Invoke-AICommand"
 Set-Alias -Name "aia" -Value "Invoke-AICommandAuto"
 Set-Alias -Name "nl" -Value "Start-NLMode"
 
-# Export module members
-Export-ModuleMember -Function @(
-    'Invoke-AICommand',
-    'Invoke-AICommandAuto',
-    'Start-NLMode',
-    'Test-OllamaConnection',
-    'Show-CommandHistory',
-    'Clear-CommandHistory',
-    'Get-ContextInfo',
-    'Add-ToHistory',
-    'Show-ThinkingAnimation'
-) -Alias @('ai', 'aia', 'nl')
-
 # Auto-start in natural language mode
 function Start-AITerminal {
     Write-Host "🤖 AI Terminal - Natural Language Interface" -ForegroundColor Green
     Write-Host "Describe what you want to do in plain English. Type 'exit' to quit." -ForegroundColor Gray
     Write-Host ""
     
-    $sessionCommands = 0
-    
-    while ($true) {
+    :repl while ($true) {
         $context = Get-ContextInfo
         $prompt = "AI>"
         
@@ -555,12 +545,12 @@ function Start-AITerminal {
         }
         
         Write-Host "$prompt " -NoNewline -ForegroundColor Cyan
-        $input = Read-Host
+        $userInput = Read-Host
         
-        switch ($input.ToLower().Trim()) {
+        switch ($userInput.ToLower().Trim()) {
             'exit' {
                 Write-Host "👋 Goodbye!" -ForegroundColor Green
-                break
+                break repl
             }
             'history' {
                 Show-CommandHistory -Last 10
@@ -583,14 +573,12 @@ function Start-AITerminal {
                 continue
             }
             default {
-                if ($input.Trim()) {
-                    $sessionCommands++
+                if ($userInput.Trim()) {
                     # Smart execution with confirmation for dangerous commands
-                    $command = Get-CommandSuggestion -NaturalLanguage $input
+                    $command = Get-CommandSuggestion -NaturalLanguage $userInput
                     
                     if ($command) {
-                        $command = $command.Trim() -replace '^```.*$', '' -replace '^```$', ''
-                        $command = $command.Trim()
+                        $command = ConvertTo-CleanCommand -Response $command
                         
                         # Show the command being generated
                         Write-Host "💻 " -NoNewline -ForegroundColor Cyan
@@ -603,10 +591,10 @@ function Start-AITerminal {
                                 if ($result) {
                                     $result | ForEach-Object { Write-Host $_ }
                                 }
-                                Add-ToHistory -Request $input -Command $command -Executed $true
+                                Add-ToHistory -Request $userInput -Command $command -Executed $true
                             } catch {
                                 Write-Host "❌ $($_.Exception.Message)" -ForegroundColor Red
-                                Add-ToHistory -Request $input -Command $command -Executed $false
+                                Add-ToHistory -Request $userInput -Command $command -Executed $false
                             }
                         } else {
                             # Ask for confirmation on potentially dangerous commands
@@ -618,19 +606,19 @@ function Start-AITerminal {
                                     if ($result) {
                                         $result | ForEach-Object { Write-Host $_ }
                                     }
-                                    Add-ToHistory -Request $input -Command $command -Executed $true
+                                    Add-ToHistory -Request $userInput -Command $command -Executed $true
                                 } catch {
                                     Write-Host "❌ $($_.Exception.Message)" -ForegroundColor Red
-                                    Add-ToHistory -Request $input -Command $command -Executed $false
+                                    Add-ToHistory -Request $userInput -Command $command -Executed $false
                                 }
                             } else {
                                 Write-Host "Command cancelled" -ForegroundColor Gray
-                                Add-ToHistory -Request $input -Command $command -Executed $false
+                                Add-ToHistory -Request $userInput -Command $command -Executed $false
                             }
                         }
                     } else {
-                        Write-Host "❌ Could not understand: '$input'" -ForegroundColor Red
-                        Add-ToHistory -Request $input -Command "" -Executed $false
+                        Write-Host "❌ Could not understand: '$userInput'" -ForegroundColor Red
+                        Add-ToHistory -Request $userInput -Command "" -Executed $false
                     }
                     Write-Host ""
                 }
@@ -639,7 +627,23 @@ function Start-AITerminal {
     }
 }
 
-# Welcome message and auto-start
-Write-Host "[SUCCESS $(Get-Date -Format 'HH:mm:ss')] AI Terminal loaded! Starting natural language interface..." -ForegroundColor Green
-Start-Sleep -Milliseconds 500
-Start-AITerminal
+# Export module members
+Export-ModuleMember -Function @(
+    'Invoke-AICommand',
+    'Invoke-AICommandAuto',
+    'Start-NLMode',
+    'Start-AITerminal',
+    'Test-OllamaConnection',
+    'Show-CommandHistory',
+    'Clear-CommandHistory',
+    'Get-ContextInfo',
+    'Add-ToHistory',
+    'Show-ThinkingAnimation'
+) -Alias @('ai', 'aia', 'nl')
+
+# Welcome message and auto-start (set NEWTERMINAL_AI_NO_AUTOSTART=1 to import without starting the REPL)
+if (-not $env:NEWTERMINAL_AI_NO_AUTOSTART) {
+    Write-Host "[SUCCESS $(Get-Date -Format 'HH:mm:ss')] AI Terminal loaded! Starting natural language interface..." -ForegroundColor Green
+    Start-Sleep -Milliseconds 500
+    Start-AITerminal
+}

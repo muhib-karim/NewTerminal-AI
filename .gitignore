@@ -113,3 +113,8 @@ models/
 *.user
 .personal
 *.personal
+# Pester output
+testResults.xml
+
+# Keep Pester test files even on case-insensitive filesystems (see "*.test.*" above)
+!*.Tests.ps1
